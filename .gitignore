@@ -18,7 +18,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -165,3 +164,5 @@ debug.py
 #.idea/
 .vscode
 # End of https://www.toptal.com/developers/gitignore/api/python
+**/.skey
+**/.vkey
