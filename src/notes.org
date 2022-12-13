@@ -1,0 +1,32 @@
+#+title: Notes
+swap use (coinA)
+* Owner
+1 Almacenar el oraculo type
+2 Crear instancia del swap contract basado en 1 (swap utxo)
+3 Añadir liquidez monedaA y monedaB al swap utxo
+* User
+** 4.Swap use to trade coins (I: swap utxo and wallet usear, O: swap utxo and wallet user
+1. Crear la instancia del contrato (1UTXO)
+   1. store the inf
+2. Crear el reference script at swap address
+3. Fetch the oracle feed UTXO (inline datum)
+   1. class oracle, class swap ?
+4. Submit transaction
+* Relevant
+** Deep
+address -> script from blockfrost -> crear un reference utxo (script y datum), at the oracle address
+** Stan
+minting policy (plutus) -> workds as expected
+
+
+* Notas dentro de notas
+1. en haskell se proveee el datum  uasndo el chain index como intermediarion (ver lookupNotes process)
+2. en pycardano estos se hace con la funcion de abajo
+#+begin_src python
+builder.add_script_input(utxo_to_spend, forty_two_script, datum, redeemer)
+#+end_src
+3. esta funcion usa reference utxo with a script attached
+#+begin_src python
+builder.add_script_input(utxo_to_spend, forty_two_script, datum, redeemer)
+#+end_src
+SUMMARY: REFERENCE SCRIPT EN UN UTXO ENTONCES AÑADE EL DATUM, podemos crear n referece script y crear los datum en otras palabras es un utxo con un script y un datum (que estasn en el utxo)
