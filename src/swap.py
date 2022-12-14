@@ -77,11 +77,11 @@ class SwapContract:
             coin=2000000, multi_asset=traded_asset_for_the_user
         )
 
-        output_user = pyc.TransactionOutput(
-            address=user_address, amount=new_value_user, datum=Nothing()
-        )
+        output_user = pyc.TransactionOutput(address=user_address, amount=new_value_user)
 
-        available_amountB_in_swap = self.get_available_amount(self.swap.coinA)
+        # available_amountB_in_swap = self.get_available_amount(self.swap.coinA)
+        available_amountB_in_swap = swap_utxo.output.amount.coin
+        print(available_amountB_in_swap)
         sending_amount = available_amountB_in_swap + (amountB * self.coin_precision)
         sending_m_asset = self.add_asset_swap(amountA)
 
@@ -103,7 +103,6 @@ class SwapContract:
 
         # print(f"Amount avaiblabe in swap to trade: {available_amountB_in_swap} A")
 
-        # print(builder)
         non_nft_utxo = None
         for utxo in self.context.utxos(str(user_address)):
             # multi_asset should be empty for collateral utxo
@@ -114,9 +113,10 @@ class SwapContract:
         builder.collaterals.append(non_nft_utxo)
 
         signed_tx = builder.build_and_sign([sk], change_address=user_address)
+        print(builder)
         self.context.submit_tx(signed_tx.to_cbor())
 
-        print(f"Traded: {amountB} ADA by {amountA} USDT.")
+        # print(f"Traded: {amountB} ADA by {amountA} USDT.")
 
     # operation for swaping coin B with A
     def swap_b_with_a(self, amount_b: int) -> int:

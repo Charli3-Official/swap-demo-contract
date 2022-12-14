@@ -80,9 +80,9 @@ context = ChainQuery(
     base_url="https://cardano-preprod.blockfrost.io/api",
 )
 
-# with open("./utils/scripts/swap.plutus", "r") as f:
-#     script_hex = f.read()
-#     swap_script_u = cbor2.loads(bytes.fromhex(script_hex))
+with open("./utils/scripts/swap.plutus", "r") as f:
+    script_hex = f.read()
+    swap_script_u = cbor2.loads(bytes.fromhex(script_hex))
 
 # script_hash_from_file = plutus_script_hash(swap_script_u)
 # print(script_hash_from_file)
