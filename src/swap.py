@@ -65,9 +65,7 @@ class SwapContract:
         oracle_feed_utxo = self.get_oracle_feed_utxo()
         swap_utxo = self.context.utxos(str(swap_address))[0]
 
-        swap_redeemer = pyc.Redeemer(
-            pyc.RedeemerTag.SPEND, SwapB(amountB), pyc.ExecutionUnits(1000000, 80000000)
-        )
+        swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapB(amountB))
 
         builder = pyc.TransactionBuilder(self.context)
 
@@ -98,7 +96,7 @@ class SwapContract:
             .add_input_address(user_address)
             .add_output(output_user)
             .add_output(output_swap)
-            .reference_inputs.add(oracle_feed_utxo)
+            .reference_inputs.add(oracle_feed_utxo.input)
         )
 
         # print(f"Amount avaiblabe in swap to trade: {available_amountB_in_swap} A")
@@ -113,10 +111,10 @@ class SwapContract:
         builder.collaterals.append(non_nft_utxo)
 
         signed_tx = builder.build_and_sign([sk], change_address=user_address)
-        print(builder)
+        # print(builder)
         self.context.submit_tx(signed_tx.to_cbor())
 
-        # print(f"Traded: {amountB} ADA by {amountA} USDT.")
+        print(f"Traded: {amountB} ADA by {amountA} USDT.")
 
     # operation for swaping coin B with A
     def swap_b_with_a(self, amount_b: int) -> int:
