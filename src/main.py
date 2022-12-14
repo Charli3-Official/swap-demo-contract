@@ -27,7 +27,7 @@ from lib.chain_query import ChainQuery
 
 # import swap
 
-from swap import SwapContract, Oracle, Swap
+from swap import SwapContract, Swap
 
 from wallet import *
 
@@ -38,7 +38,7 @@ oracle_addr_string = "addr_test1wz58xs5ygmjf9a3p6y3qzmwxp7cyj09zk90rweazvj8vwds4
 swap_addr_string = "addr_test1wzymkkmv7tg2n2e2vffw9nluh3lvmhg2pnhvc7qxdtl82nggxgd8l"
 #
 # payment pub key hash // spending shared hash
-oracle_owner_ppkh = Address.from_primitive(oracle_owner_string).payment_part
+# oracle_owner_ppkh = Address.from_primitive(oracle_owner_string).payment_part
 # print(f"{oracle_owner_ppkh}")
 oracle_payment_pub_key_hash = Address.from_primitive(oracle_addr_string).payment_part
 # print  ( f"{type(oracle_payment_pub_key_hash)}")
@@ -109,12 +109,11 @@ new_swap_script = PlutusV2Script(cbor2.dumps(swap_script_address))
 # node_signing_key.save("node.skey")
 # node_verification_key = PaymentVerificationKey.from_signing_key(node_signing_key)
 # node_verification_key.save("node.vkey")
-node_signing_key = PaymentSigningKey.load("./credentials/node.skey")
-node_verification_key = PaymentVerificationKey.load("./credentials/node.vkey")
-node_pub_key_hash = node_verification_key.hash()
-# print(type(node_pub_key_hash))
-user_address = Address(payment_part=node_pub_key_hash, network=NETWORK_MODE)
-print(user_address)
+extendend_payment_skey = PaymentSigningKey.load("./credentials/node.skey")
+extendend_payment_vkey = PaymentVerificationKey.load("./credentials/node.vkey")
+# node_pub_key_hash = node_verification_key.hash()
+# print(type(extendend_payment_skey))
+user_address = Address(payment_part=extendend_payment_vkey.hash(), network=NETWORK_MODE)
 oracle_nft = MultiAsset.from_primitive(
     {
         "8fe2ef24b3cc8882f01d9246479ef6c6fc24a6950b222c206907a8be": {
@@ -149,8 +148,12 @@ ada = AssetName.from_primitive("")
 # test = Asset.from_primitive(
 #     {"c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac": {b"USDT": 1}}
 # )
-oracle = Oracle(oracle_owner_ppkh, oracle_nft, aggState_nft, fee_token, node_token)
 swap = Swap(swap_nft, usdt, ada)
-swapInstance = SwapContract(context, oracle_address, swap_address, oracle, swap)
+swapInstance = SwapContract(context, oracle_address, oracle_nft, swap_address, swap)
 # user_address = user_address()
-swapInstance.swap_B(4, user_address, swap_address, new_swap_script, node_signing_key)
+print(f"Addres of the current user that wants to trade: {user_address}")
+initial_value = 3
+print(f"Trading quanity: {initial_value} B")
+swapInstance.swap_B(
+    initial_value, user_address, swap_address, new_swap_script, extendend_payment_skey
+)
