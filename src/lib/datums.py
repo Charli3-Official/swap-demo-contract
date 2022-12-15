@@ -35,11 +35,3 @@ class PriceData(PlutusData):
 class GenericData(PlutusData):
     CONSTR_ID = 0
     price_data: PriceData
-
-
-@dataclass
-class Nothing(PlutusData):
-    CONSTR_ID = 1
-
-
-# 121([123([{0: 2400000, 1: 1669903618, 2: 1701439564}])])

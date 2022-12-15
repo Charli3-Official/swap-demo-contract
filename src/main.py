@@ -35,7 +35,8 @@ from wallet import *
 oracle_owner_string = "addr_test1qqd92r2l2ujcfcdd6yjm2uf0wzdv8wvz3tvxtqdywkgz9wst8wu42mt05a6cy4g05semeh9qs93r3ar8wn9n0u49mx8sc5ctp6"
 oracle_addr_string = "addr_test1wz58xs5ygmjf9a3p6y3qzmwxp7cyj09zk90rweazvj8vwds4d703u"
 # swap_addr_string = "addr_test1wpvqg0lgah2wung0shfqh3u0q0xcjedhszvxrvr8gm6crfq4mwzd3"
-swap_addr_string = "addr_test1wzymkkmv7tg2n2e2vffw9nluh3lvmhg2pnhvc7qxdtl82nggxgd8l"
+# swap_addr_string = "addr_test1wzymkkmv7tg2n2e2vffw9nluh3lvmhg2pnhvc7qxdtl82nggxgd8l"
+swap_addr_string = "addr_test1wqhsrhfqs6xv9g39mraau2jwnaqd7utt9x50d5sfmlz972spwd66j"
 #
 # payment pub key hash // spending shared hash
 # oracle_owner_ppkh = Address.from_primitive(oracle_owner_string).payment_part
@@ -80,9 +81,9 @@ context = ChainQuery(
     base_url="https://cardano-preprod.blockfrost.io/api",
 )
 
-with open("./utils/scripts/swap.plutus", "r") as f:
-    script_hex = f.read()
-    swap_script_u = cbor2.loads(bytes.fromhex(script_hex))
+# with open("./utils/scripts/swap.plutus", "r") as f:
+#     script_hex = f.read()
+#     swap_script_u = cbor2.loads(bytes.fromhex(script_hex))
 
 # script_hash_from_file = plutus_script_hash(swap_script_u)
 # print(script_hash_from_file)
@@ -138,7 +139,7 @@ fee_token = MultiAsset.from_primitive(
 #     {"ba2cced519c47b27f0467cf91e6fb60ce224e04bbe07ea70fbad10e0": {b"": 1}}
 # )
 swap_nft = MultiAsset.from_primitive(
-    {"5442f0aab0b8c67e65ea112c55ac16626de5f5ed3bcebc028af5ae89": {b"": 1}}
+    {"ce9d1f8f464e1e930f19ae89ccab3de93d11ee5518eed15d641f6693": {b"SWAP": 1}}
 )
 usdt = MultiAsset.from_primitive(
     {"c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac": {b"USDT": 1}}
@@ -149,7 +150,7 @@ ada = AssetName.from_primitive("")
 #     {"c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac": {b"USDT": 1}}
 # )
 swap = Swap(swap_nft, usdt, ada)
-swapInstance = SwapContract(context, oracle_address, oracle_nft, swap_address, swap)
+swapInstance = SwapContract(context, oracle_nft, oracle_address, swap_address, swap)
 # user_address = user_address()
 print(f"Addres of the current user that wants to trade: {user_address}")
 initial_value = 3

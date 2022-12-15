@@ -1,15 +1,21 @@
-"""A class to read an oracle feed"""
 import pycardano as pyc
-from typing import List, Tuple
+from typing import Tuple
 from lib.chain_query import ChainQuery
-import cbor2
 
-from lib.datums import GenericData, PriceData
+from lib.datums import GenericData
 from lib.redeemers import SwapA, SwapB
-from lib.datums import *
 
 
 class Swap:
+    """Class Swap for interact with the assets in the swap operation
+    and identify the spwa NFT
+
+    Attribures:
+        swap_nft: The NFT identifier of the swap utxo
+        coinA: Asset
+        coinB: Asset
+    """
+
     def __init__(
         self,
         swap_nft: pyc.MultiAsset,
@@ -22,13 +28,20 @@ class Swap:
 
 
 class SwapContract:
-    """read oralce feed"""
+    """SwapContact to interact with the swap smart contract
+
+    Attributes:
+        context: Blockfrost class
+        oracle_nft: The NFT identifier of the oracle feed utxo
+        oracle_addr: Address of the oracle contract
+        swap_addr: Address of the swap contract
+    """
 
     def __init__(
         self,
         context: ChainQuery,
-        oracle_addr: pyc.Address,
         oracle_nft: pyc.MultiAsset,
+        oracle_addr: pyc.Address,
         swap_addr: pyc.Address,
         swap: Swap,
     ) -> None:
@@ -37,23 +50,12 @@ class SwapContract:
         self.swap_addr = swap_addr
         self.coin_precision = 1000000
         self.swap = swap
-        self.swap_script_hash = self.swap_addr.payment_part
         self.oracle_nft = oracle_nft
 
-    def create_contract_instance(self):
-        """Create an oracle contract using the oracle as input"""
-        # the instance should use an referce script utxo at the swap address
-        pass
-
-    def add_liquidity(self, coinA: int, coinB: int):
-        """Add liquidity of two predifined coins"""
-        pass
-
-    # operation for swaping coin A with B
     def swap_A(self):
+        """Exchange of asset A  with B"""
         pass
 
-    # operation for swaping coin B with A
     def swap_B(
         self,
         amountB: int,
@@ -62,68 +64,58 @@ class SwapContract:
         script: bytes,
         sk: pyc.PaymentSigningKey,
     ):
-        oracle_feed_utxo = self.get_oracle_feed_utxo()
-        swap_utxo = self.context.utxos(str(swap_address))[0]
-
+        """Exchange of asset B  with A"""
+        oracle_feed_utxo = self.get_oracle_utxo()
+        swap_utxo = self.get_swap_utxo()
+        amountA = self.swap_b_with_a(amountB)
         swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapB(amountB))
 
-        builder = pyc.TransactionBuilder(self.context)
-
-        amountA = self.swap_b_with_a(amountB)
-        traded_asset_for_the_user = self.new_multi_asset_user(amountA)
-        new_value_user = pyc.transaction.Value(
-            coin=2000000, multi_asset=traded_asset_for_the_user
+        multi_asset_for_the_user = self.new_multi_asset_user(amountA)
+        amount_for_the_user = pyc.transaction.Value(
+            coin=2000000, multi_asset=multi_asset_for_the_user
+        )
+        new_output_utxo_user = pyc.TransactionOutput(
+            address=user_address, amount=amount_for_the_user
         )
 
-        output_user = pyc.TransactionOutput(address=user_address, amount=new_value_user)
-
-        # available_amountB_in_swap = self.get_available_amount(self.swap.coinA)
-        available_amountB_in_swap = swap_utxo.output.amount.coin
-        print(available_amountB_in_swap)
-        sending_amount = available_amountB_in_swap + (amountB * self.coin_precision)
-        sending_m_asset = self.add_asset_swap(amountA)
+        amountB_at_swap_utxo = swap_utxo.output.amount.coin
+        updated_amountB_for_swap_utxo = amountB_at_swap_utxo + (
+            amountB * self.coin_precision
+        )
+        updated_masset_for_swap_utxo = self.add_asset_swap(amountA)
 
         amount_swap = pyc.transaction.Value(
-            coin=sending_amount, multi_asset=sending_m_asset
+            coin=updated_amountB_for_swap_utxo, multi_asset=updated_masset_for_swap_utxo
         )
 
-        output_swap = pyc.TransactionOutput(
-            address=swap_address, amount=amount_swap, datum=Nothing()
+        new_output_swap = pyc.TransactionOutput(
+            address=swap_address, amount=amount_swap, datum=pyc.PlutusData()
         )
 
+        builder = pyc.TransactionBuilder(self.context)
         (
-            builder.add_script_input(swap_utxo, script, PlutusData(), swap_redeemer)
+            builder.add_script_input(
+                utxo=swap_utxo, script=script, redeemer=swap_redeemer
+            )
             .add_input_address(user_address)
-            .add_output(output_user)
-            .add_output(output_swap)
+            .add_output(new_output_utxo_user)
+            .add_output(new_output_swap)
             .reference_inputs.add(oracle_feed_utxo.input)
         )
 
+        self.submit_tx_builder(builder, sk, user_address)
+
         # print(f"Amount avaiblabe in swap to trade: {available_amountB_in_swap} A")
+        # print(f"Traded: {amountB} B with {amountA} A.")
 
-        non_nft_utxo = None
-        for utxo in self.context.utxos(str(user_address)):
-            # multi_asset should be empty for collateral utxo
-            if not utxo.output.amount.multi_asset:
-                non_nft_utxo = utxo
-                break
-
-        builder.collaterals.append(non_nft_utxo)
-
-        signed_tx = builder.build_and_sign([sk], change_address=user_address)
-        # print(builder)
-        self.context.submit_tx(signed_tx.to_cbor())
-
-        print(f"Traded: {amountB} ADA by {amountA} USDT.")
-
-    # operation for swaping coin B with A
     def swap_b_with_a(self, amount_b: int) -> int:
+        """operation for swaping coin B with A"""
         exchange_rate_price = self.get_oracle_exchange_rate()
         print(f"Oracle exchange rate: {exchange_rate_price} B/A")
         return (amount_b * self.coin_precision) // exchange_rate_price
 
-    # operation for swaping coin A with B
     def swap_a_with_b(self, amount_a: int) -> int:
+        """operation for swaping coin A with B"""
         exchange_rate_price = self.get_oracle_exchange_rate()
         print(f"Oracle exchange rate: {exchange_rate_price} B/A")
         return (amount_a * exchange_rate_price) // self.coin_precision
@@ -141,6 +133,7 @@ class SwapContract:
         # return change
 
     def get_asset_amount_in_swap(self, asset: pyc.MultiAsset) -> Tuple[pyc.Asset, int]:
+        """Determine a given asset amount at swap utxo"""
         swap_utxo = self.get_swap_utxo()
         [policy_id] = asset
         value = swap_utxo.output.amount.multi_asset
@@ -152,33 +145,33 @@ class SwapContract:
         return token
 
     def get_oracle_exchange_rate(self) -> int:
-        oracle_utxos = self.context.utxos(str(self.oracle_addr))
-        oracle_feed_utxo = self.get_oracle_feed_utxo()
+        """Get the oracle feed exchange rate"""
+        oracle_feed_utxo = self.get_oracle_utxo()
         oracle_inline_datum: GenericData = GenericData.from_cbor(
             oracle_feed_utxo.output.datum.cbor
         )
         return oracle_inline_datum.price_data.get_price()
 
-    def get_oracle_feed_utxo(self) -> pyc.UTxO:
+    def get_oracle_utxo(self) -> pyc.UTxO:
+        """Get the oracle feed utxo"""
         oracle_utxos = self.context.utxos(str(self.oracle_addr))
-        [single_UTxO] = filter(
+        [oracle_utxo_nft] = filter(
             lambda x: x.output.amount.multi_asset >= self.oracle_nft,
             oracle_utxos,
         )
-        return single_UTxO
+        return oracle_utxo_nft
 
     def get_swap_utxo(self) -> pyc.UTxO:
+        """Get the swap utxo using the nft identifier"""
         swap_utxos = self.context.utxos(str(self.swap_addr))
-        return self.get_swap_liquidity_utxo(swap_utxos)
-
-    def get_swap_liquidity_utxo(self, swap_utxos: List[pyc.UTxO]) -> pyc.UTxO:
-        [single_UTxO] = filter(
+        [swap_utxo_nft] = filter(
             lambda x: x.output.amount.multi_asset >= self.swap.swap_nft,
             swap_utxos,
         )
-        return single_UTxO
+        return swap_utxo_nft
 
     def add_asset_swap(self, selling_amount: int) -> pyc.MultiAsset:
+        """The updated swap asset to be added at the address"""
         ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
         ((asset, _),) = assets.to_shallow_primitive().items()
 
@@ -200,6 +193,7 @@ class SwapContract:
         return new_multi_asset_dict
 
     def new_multi_asset_user(self, buying_amount: int) -> pyc.MultiAsset:
+        """The updated user asset to be added to it's wallet"""
         ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
         ((asset, _),) = assets.to_shallow_primitive().items()
 
@@ -230,3 +224,21 @@ class SwapContract:
                     if asset_name == asset:
                         available_amount = amount
         return available_amount
+
+    def submit_tx_builder(
+        self,
+        builder: pyc.TransactionBuilder,
+        sk: pyc.PaymentSigningKey,
+        address: pyc.Address,
+    ):
+        """Adds collateral and signers to tx , sign and submit tx."""
+        non_nft_utxo = self.context.find_collateral(address)
+
+        if non_nft_utxo is None:
+            self.context.create_collateral(address, sk)
+            non_nft_utxo = self.context.find_collateral(address)
+
+        builder.collaterals.append(non_nft_utxo)
+        signed_tx = builder.build_and_sign([sk], change_address=address)
+        # print(builder)
+        self.context.submit_tx_with_print(signed_tx)
