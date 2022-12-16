@@ -112,8 +112,10 @@ class SwapContract:
         """Exchange of asset B  with A"""
         oracle_feed_utxo = self.get_oracle_utxo()
         swap_utxo = self.get_swap_utxo()
-        amountA = self.swap_b_with_a(amountB)
-        swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapB(amountB))
+        amountA = self.swap_b_with_a(amountB // self.coin_precision)
+        swap_redeemer = pyc.Redeemer(
+            pyc.RedeemerTag.SPEND, SwapB(amountB // self.coin_precision)
+        )
 
         multi_asset_for_the_user = self.take_multi_asset_user(amountA)
         amount_for_the_user = pyc.transaction.Value(
@@ -124,9 +126,7 @@ class SwapContract:
         )
 
         amountB_at_swap_utxo = swap_utxo.output.amount.coin
-        updated_amountB_for_swap_utxo = amountB_at_swap_utxo + (
-            amountB * self.coin_precision
-        )
+        updated_amountB_for_swap_utxo = amountB_at_swap_utxo + (amountB)
         updated_masset_for_swap_utxo = self.decrease_asset_swap(amountA)
 
         amount_swap = pyc.transaction.Value(
