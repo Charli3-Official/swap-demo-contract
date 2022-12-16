@@ -52,9 +52,54 @@ class SwapContract:
         self.swap = swap
         self.oracle_nft = oracle_nft
 
-    def swap_A(self):
+    def swap_A(
+        self,
+        amountA: int,
+        user_address: pyc.Address,
+        swap_address: pyc.Address,
+        script: bytes,
+        sk: pyc.PaymentSigningKey,
+    ):
         """Exchange of asset A  with B"""
-        pass
+        oracle_feed_utxo = self.get_oracle_utxo()
+        swap_utxo = self.get_swap_utxo()
+        amountB = self.swap_a_with_b(amountA)
+        swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapA(amountA))
+        print(amountB)
+
+        # multi_asset_for_the_user = self.give_multi_asset_user(amountA, user_address)
+        amount_for_the_user = pyc.transaction.Value(
+            coin=amountB * self.coin_precision
+        )  # , multi_asset=multi_asset_for_the_user
+        # )
+        new_output_utxo_user = pyc.TransactionOutput(
+            address=user_address, amount=amount_for_the_user
+        )
+        # swap utxo
+        amountB_at_swap_utxo = swap_utxo.output.amount.coin
+        updated_amountB_for_swap_utxo = amountB_at_swap_utxo - amountB
+
+        updated_masset_for_swap_utxo = self.add_asset_swap(amountA)  # add usdt
+        amount_swap = pyc.transaction.Value(
+            coin=updated_amountB_for_swap_utxo, multi_asset=updated_masset_for_swap_utxo
+        )
+
+        new_output_swap = pyc.TransactionOutput(
+            address=swap_address, amount=amount_swap, datum=pyc.PlutusData()
+        )
+
+        builder = pyc.TransactionBuilder(self.context)
+        (
+            builder.add_script_input(
+                utxo=swap_utxo, script=script, redeemer=swap_redeemer
+            )
+            .add_input_address(user_address)
+            .add_output(new_output_utxo_user)
+            .add_output(new_output_swap)
+            .reference_inputs.add(oracle_feed_utxo.input)
+        )
+
+        self.submit_tx_builder(builder, sk, user_address)
 
     def swap_B(
         self,
@@ -70,7 +115,7 @@ class SwapContract:
         amountA = self.swap_b_with_a(amountB)
         swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapB(amountB))
 
-        multi_asset_for_the_user = self.new_multi_asset_user(amountA)
+        multi_asset_for_the_user = self.take_multi_asset_user(amountA)
         amount_for_the_user = pyc.transaction.Value(
             coin=2000000, multi_asset=multi_asset_for_the_user
         )
@@ -82,7 +127,7 @@ class SwapContract:
         updated_amountB_for_swap_utxo = amountB_at_swap_utxo + (
             amountB * self.coin_precision
         )
-        updated_masset_for_swap_utxo = self.add_asset_swap(amountA)
+        updated_masset_for_swap_utxo = self.decrease_asset_swap(amountA)
 
         amount_swap = pyc.transaction.Value(
             coin=updated_amountB_for_swap_utxo, multi_asset=updated_masset_for_swap_utxo
@@ -161,6 +206,21 @@ class SwapContract:
         )
         return oracle_utxo_nft
 
+    def get_user_utxo(self, address: pyc.Address, amountA: int) -> pyc.UTxO:
+        """Get the oracle feed utxo"""
+        ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
+        ((asset, _),) = assets.to_shallow_primitive().items()
+
+        user_utxos = self.context.utxos(str(address))
+        for utxo in user_utxos:
+            m_assets = utxo.output.amount.multi_asset.to_shallow_primitive()
+            for user_policy_id, assets in m_assets.items():
+                if policy_id == user_policy_id:
+                    for asset_name, amount in assets.items():
+                        if asset_name == asset and amount >= amountA:
+                            print(f"user_utxos {utxo}")
+                            # return utxo
+
     def get_swap_utxo(self) -> pyc.UTxO:
         """Get the swap utxo using the nft identifier"""
         swap_utxos = self.context.utxos(str(self.swap_addr))
@@ -170,7 +230,7 @@ class SwapContract:
         )
         return swap_utxo_nft
 
-    def add_asset_swap(self, selling_amount: int) -> pyc.MultiAsset:
+    def decrease_asset_swap(self, selling_amount: int) -> pyc.MultiAsset:
         """The updated swap asset to be added at the address"""
         ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
         ((asset, _),) = assets.to_shallow_primitive().items()
@@ -192,7 +252,29 @@ class SwapContract:
         new_multi_asset_dict[policy_id] = multi_asset_assets_names
         return new_multi_asset_dict
 
-    def new_multi_asset_user(self, buying_amount: int) -> pyc.MultiAsset:
+    def add_asset_swap(self, buying_amount: int) -> pyc.MultiAsset:
+        """The updated swap asset to be added at the address"""
+        ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
+        ((asset, _),) = assets.to_shallow_primitive().items()
+
+        swap_utxo = self.get_swap_utxo()
+        m_assets = swap_utxo.output.amount.multi_asset.to_shallow_primitive()
+
+        new_multi_asset_dict = pyc.MultiAsset()
+        multi_asset_assets_names = pyc.Asset()
+        for swap_policy_id, assets in m_assets.items():
+            if swap_policy_id == policy_id:
+                for asset_name, amount in assets.items():
+                    if asset_name == asset:
+                        multi_asset_assets_names[asset_name] = amount + buying_amount
+                    else:
+                        multi_asset_assets_names[asset_name] = amount
+            else:
+                new_multi_asset_dict[swap_policy_id] = assets
+        new_multi_asset_dict[policy_id] = multi_asset_assets_names
+        return new_multi_asset_dict
+
+    def take_multi_asset_user(self, buying_amount: int) -> pyc.MultiAsset:
         """The updated user asset to be added to it's wallet"""
         ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
         ((asset, _),) = assets.to_shallow_primitive().items()
@@ -207,6 +289,32 @@ class SwapContract:
                 for asset_name, _ in assets.items():
                     if asset_name == asset:
                         multi_asset_assets_names[asset_name] = buying_amount
+        new_multi_asset_dict[policy_id] = multi_asset_assets_names
+        return new_multi_asset_dict
+
+    def give_multi_asset_user(
+        self, selling_amount: int, user_address: pyc.Address
+    ) -> pyc.MultiAsset:
+        """The updated user asset to be added to it's wallet"""
+        ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
+        ((asset, _),) = assets.to_shallow_primitive().items()
+
+        # user_utxos and take away the usdt, store the rest
+        user_utxo = self.get_user_utxo(user_address, selling_amount)
+
+        m_assets = user_utxo.output.amount.multi_asset.to_shallow_primitive()
+
+        new_multi_asset_dict = pyc.MultiAsset()
+        multi_asset_assets_names = pyc.Asset()
+        for user_policy_id, assets in m_assets.items():
+            if user_policy_id == policy_id:
+                for asset_name, amount in assets.items():
+                    if asset_name == asset:
+                        multi_asset_assets_names[asset_name] = amount - selling_amount
+                    else:
+                        multi_asset_assets_names[asset_name] = amount
+            else:
+                new_multi_asset_dict[user_policy_id] = assets
         new_multi_asset_dict[policy_id] = multi_asset_assets_names
         return new_multi_asset_dict
 
@@ -239,6 +347,6 @@ class SwapContract:
             non_nft_utxo = self.context.find_collateral(address)
 
         builder.collaterals.append(non_nft_utxo)
+        print(builder)
         signed_tx = builder.build_and_sign([sk], change_address=address)
-        # print(builder)
         self.context.submit_tx_with_print(signed_tx)

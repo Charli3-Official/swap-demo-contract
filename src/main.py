@@ -153,8 +153,13 @@ swap = Swap(swap_nft, usdt, ada)
 swapInstance = SwapContract(context, oracle_nft, oracle_address, swap_address, swap)
 # user_address = user_address()
 print(f"Addres of the current user that wants to trade: {user_address}")
-initial_value = 3
+initial_value = 2
 print(f"Trading quanity: {initial_value} B")
-swapInstance.swap_B(
+
+# swapInstance.swap_B(
+#     initial_value, user_address, swap_address, new_swap_script, extendend_payment_skey
+# )
+
+swapInstance.swap_A(
     initial_value, user_address, swap_address, new_swap_script, extendend_payment_skey
 )
