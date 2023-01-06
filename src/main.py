@@ -77,8 +77,8 @@ swap = Swap(swap_nft, tUSDT)
 # Parser
 parser = argparse.ArgumentParser(
     prog="python main.py",
-    description="The swap python script is a demonstrative smart contract (Plutus v2) featuring the interaction with a charli3 oracle. This script uses the inline oracle feed as reference input simulating the exchange rate between tADA and tUSDT to sell or buy assets from a swap contract in the test environment of preproduction. ",
-    epilog="Copyrigth: (c) 2020 - 2022 Charli3",
+    description="The swap python script is a demonstrative smart contract (Plutus v2) featuring the interaction with a charli3's oracle. This script uses the inline oracle feed as reference input simulating the exchange rate between tADA and tUSDT to sell or buy assets from a swap contract in the test environment of preproduction. ",
+    epilog="Copyrigth: (c) 2020 - 2023 Charli3",
 )
 
 # Create a subparser for each main choice

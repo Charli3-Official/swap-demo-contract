@@ -59,27 +59,36 @@ class SwapContract:
         """Exchange of asset A  with B"""
         oracle_feed_utxo = self.get_oracle_utxo()
         swap_utxo = self.get_swap_utxo()
-        amountB = self.swap_a_with_b(amountA)
+        amountB = self.swap_a_with_b(amountA) * self.coin_precision
 
-        available_swap_tlovelace = swap_utxo.output.amount.coin
-        if amountB > available_swap_tlovelace:
+        # min_ada = 857690
+        min_ada = 1000000
+        swap_amountB_tADA = swap_utxo.output.amount.coin
+
+        if amountB < min_ada:
+            print(
+                "The minimum sale quantity of tADA is 1 tADA. Current value in return {amountB} tlovelace."
+            )
+
+        elif amountB > swap_amountB_tADA:
             print(
                 """Error! The swap contract doesn't have enough liquidity!
-            Available: {available_swap_tlovelace} tlovelace."""
+            Available: {swap_amountB_tADA} tlovelace."""
             )
         else:
             swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapA(amountA))
 
-            amount_for_the_user = pyc.transaction.Value(
-                coin=amountB * self.coin_precision
-            )
+            amount_for_the_user = pyc.transaction.Value(coin=amountB)
 
             new_output_utxo_user = pyc.TransactionOutput(
                 address=user_address, amount=amount_for_the_user
             )
+
             # swap utxo
-            amountB_at_swap_utxo = swap_utxo.output.amount.coin
-            updated_amountB_for_swap_utxo = amountB_at_swap_utxo - amountB
+            # pycardano works with ADA units
+            updated_amountB_for_swap_utxo = swap_amountB_tADA - (
+                amountB // self.coin_precision
+            )
 
             updated_masset_for_swap_utxo = self.add_asset_swap(amountA)
             updated_masset_amount_for_swap_utxo = self.add_asset_swap_amount(amountA)
@@ -104,11 +113,13 @@ class SwapContract:
                 .reference_inputs.add(oracle_feed_utxo.input)
             )
 
-            print(f"Exchanging {amountA} tUSDTs for {amountB} tlovelaces.")
+            print(
+                f"Exchanging {amountA} tUSDTs for {amountB // 1000000} tADA ({amountB} tlovelaces)."
+            )
             self.submit_tx_builder(builder, sk, user_address)
             print(
                 f"""Updated swap contract liquidity:
-                * {updated_amountB_for_swap_utxo} tlovelaves.
+                * {updated_amountB_for_swap_utxo} tlovelaces.
                 * {updated_masset_amount_for_swap_utxo} tUSDT."""
             )
 
@@ -137,9 +148,24 @@ class SwapContract:
             )
 
             multi_asset_for_the_user = self.take_multi_asset_user(amountA)
-            amount_for_the_user = pyc.transaction.Value(
-                coin=2000000, multi_asset=multi_asset_for_the_user
+
+            # Calculate minimum lovelace a transaction output needs to hold post alonzo
+            min_lovelace_amount_for_the_user = pyc.transaction.Value(
+                multi_asset=multi_asset_for_the_user
             )
+            min_lovelace_output_utxo_user = pyc.TransactionOutput(
+                address=user_address, amount=min_lovelace_amount_for_the_user
+            )
+            min_lovelace = pyc.utils.min_lovelace_post_alonzo(
+                min_lovelace_output_utxo_user, self.context
+            )
+
+            # Add the minimum lovelace amount to the user value
+            amount_for_the_user = pyc.transaction.Value(
+                coin=min_lovelace, multi_asset=multi_asset_for_the_user
+            )
+
+            # Add the value to the user UTXO
             new_output_utxo_user = pyc.TransactionOutput(
                 address=user_address, amount=amount_for_the_user
             )
@@ -173,24 +199,25 @@ class SwapContract:
             )
 
             print(f"Exchanging {amountB} tlovelaces for {amountA} tUSDTs.")
-            print(builder)
             self.submit_tx_builder(builder, sk, user_address)
             print(
                 f"""Updated swap contract liquidity:
-                * {updated_amountB_for_swap_utxo} tlovelaves.
+                * {updated_amountB_for_swap_utxo} tlovelaces.
                 * {updated_masset_amount_for_swap_utxo} tUSDT."""
             )
 
     def swap_b_with_a(self, amount_b: int) -> int:
         """Operation for swaping coin B with A"""
         exchange_rate_price = self.get_oracle_exchange_rate()
-        print(f"Oracle exchange rate: {exchange_rate_price} tADA/tUSDT")
+        precision = exchange_rate_price // self.coin_precision
+        print(f"Oracle exchange rate: {precision} tADA/tUSDT")
         return (amount_b * self.coin_precision) // exchange_rate_price
 
     def swap_a_with_b(self, amount_a: int) -> int:
         """Operation for swaping coin A with B"""
         exchange_rate_price = self.get_oracle_exchange_rate()
-        print(f"Oracle exchange rate: {exchange_rate_price} tADA/tUSDT")
+        precision = exchange_rate_price // self.coin_precision
+        print(f"Oracle exchange rate: {precision} tADA/tUSDT")
         return (amount_a * exchange_rate_price) // self.coin_precision
 
     def get_oracle_exchange_rate(self) -> int:
@@ -313,12 +340,19 @@ class SwapContract:
         new_multi_asset_dict[policy_id] = multi_asset_assets_names
         return new_multi_asset_dict
 
-    def available_user_tlovelace(self, user_address: pyc.Address) -> int:
+    def available_user_pure_tlovelace(self, user_address: pyc.Address) -> int:
         """Get the available user's pure lovelace amount"""
         amount = 0
         for utxo in self.context.utxos(str(user_address)):
             if not utxo.output.amount.multi_asset:
                 amount += utxo.output.amount.coin
+        return amount
+
+    def available_user_tlovelace(self, user_address: pyc.Address) -> int:
+        """Get the available user's  lovelace amount"""
+        amount = 0
+        for utxo in self.context.utxos(str(user_address)):
+            amount += utxo.output.amount.coin
         return amount
 
     def available_user_tusdt(self, user_address: pyc.Address) -> int:
