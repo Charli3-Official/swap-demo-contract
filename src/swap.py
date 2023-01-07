@@ -59,36 +59,40 @@ class SwapContract:
         """Exchange of asset A  with B"""
         oracle_feed_utxo = self.get_oracle_utxo()
         swap_utxo = self.get_swap_utxo()
-        amountB = self.swap_a_with_b(amountA) * self.coin_precision
+        amountB = self.swap_a_with_b(amountA)
+        amountB_precision = amountB * self.coin_precision
 
-        # min_ada = 857690
-        min_ada = 1000000
-        swap_amountB_tADA = swap_utxo.output.amount.coin
+        swap_amountB_tADA = swap_utxo.output.amount.coin // 1000000
+        user_amountB_tUSDT = self.available_user_tusdt(user_address)
 
-        if amountB < min_ada:
+        if amountB < 1:
             print(
-                "The minimum sale quantity of tADA is 1 tADA. Current value in return {amountB} tlovelace."
+                "The minimum sale quantity of tADA is 1. Current value {amountB} tADA."
             )
 
         elif amountB > swap_amountB_tADA:
             print(
-                """Error! The swap contract doesn't have enough liquidity!
-            Available: {swap_amountB_tADA} tlovelace."""
+                f"""Error! The swap contract doesn't have enough liquidity!
+            Available: {swap_amountB_tADA} tADA."""
+            )
+        elif amountA > user_amountB_tUSDT:
+            print(
+                f"""Error! The user's wallet doesn't have enough liquidity!
+            Available: {user_amountB_tUSDT} tUSDT."""
             )
         else:
             swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapA(amountA))
 
-            amount_for_the_user = pyc.transaction.Value(coin=amountB)
+            amount_for_the_user = pyc.transaction.Value(coin=amountB_precision)
 
             new_output_utxo_user = pyc.TransactionOutput(
                 address=user_address, amount=amount_for_the_user
             )
 
             # swap utxo
-            # pycardano works with ADA units
-            updated_amountB_for_swap_utxo = swap_amountB_tADA - (
-                amountB // self.coin_precision
-            )
+            # updated_amountB_for_swap_utxo = swap_amountB_tADA - amountB
+            # TODO change units to ada instead of lovelace
+            updated_amountB_for_swap_utxo = swap_utxo.output.amount.coin - amountB
 
             updated_masset_for_swap_utxo = self.add_asset_swap(amountA)
             updated_masset_amount_for_swap_utxo = self.add_asset_swap_amount(amountA)
@@ -113,9 +117,7 @@ class SwapContract:
                 .reference_inputs.add(oracle_feed_utxo.input)
             )
 
-            print(
-                f"Exchanging {amountA} tUSDTs for {amountB // 1000000} tADA ({amountB} tlovelaces)."
-            )
+            print(f"Exchanging {amountA} tUSDT for {amountB} tADA.")
             self.submit_tx_builder(builder, sk, user_address)
             print(
                 f"""Updated swap contract liquidity:
@@ -134,18 +136,26 @@ class SwapContract:
         """Exchange of asset B  with A"""
         oracle_feed_utxo = self.get_oracle_utxo()
         swap_utxo = self.get_swap_utxo()
-        amountA = self.swap_b_with_a(amountB // self.coin_precision)
+        amountA = self.swap_b_with_a(amountB)
+        available_user_tADA = self.available_user_tlovelace(user_address) // 1000000
 
         available_swap_tusdt = self.decrease_asset_swap_amount(0)
-        if amountA > available_swap_tusdt:
+        if amountA < 1:
             print(
-                """Error! The swap contract doesn't have enough liquidity!
+                f"The minimum sale quantity of tUSDT is 1. Current value {amountA} tUSDT."
+            )
+        elif amountB > available_user_tADA:
+            print(
+                f"""Error! The user's wallet doesn't have enough liquidity!
+            Available: {available_user_tADA} tADA."""
+            )
+        elif amountA > available_swap_tusdt:
+            print(
+                f"""Error! The swap contract doesn't have enough liquidity!
             Available: {available_swap_tusdt} tUSDT."""
             )
         else:
-            swap_redeemer = pyc.Redeemer(
-                pyc.RedeemerTag.SPEND, SwapB(amountB // self.coin_precision)
-            )
+            swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapB(amountB))
 
             multi_asset_for_the_user = self.take_multi_asset_user(amountA)
 
@@ -171,7 +181,7 @@ class SwapContract:
             )
 
             amountB_at_swap_utxo = swap_utxo.output.amount.coin
-            updated_amountB_for_swap_utxo = amountB_at_swap_utxo + (amountB)
+            updated_amountB_for_swap_utxo = amountB_at_swap_utxo + (amountB * 1000000)
 
             updated_masset_for_swap_utxo = self.decrease_asset_swap(amountA)
             updated_masset_amount_for_swap_utxo = self.decrease_asset_swap_amount(
@@ -198,25 +208,25 @@ class SwapContract:
                 .reference_inputs.add(oracle_feed_utxo.input)
             )
 
-            print(f"Exchanging {amountB} tlovelaces for {amountA} tUSDTs.")
+            print(f"Exchanging {amountB} tADA for {amountA} tUSDT.")
             self.submit_tx_builder(builder, sk, user_address)
             print(
                 f"""Updated swap contract liquidity:
-                * {updated_amountB_for_swap_utxo} tlovelaces.
+                * {updated_amountB_for_swap_utxo // 1000000 } tADA ({updated_amountB_for_swap_utxo} tlovelaces).
                 * {updated_masset_amount_for_swap_utxo} tUSDT."""
             )
 
     def swap_b_with_a(self, amount_b: int) -> int:
         """Operation for swaping coin B with A"""
         exchange_rate_price = self.get_oracle_exchange_rate()
-        precision = exchange_rate_price // self.coin_precision
+        precision = exchange_rate_price / self.coin_precision
         print(f"Oracle exchange rate: {precision} tADA/tUSDT")
         return (amount_b * self.coin_precision) // exchange_rate_price
 
     def swap_a_with_b(self, amount_a: int) -> int:
         """Operation for swaping coin A with B"""
         exchange_rate_price = self.get_oracle_exchange_rate()
-        precision = exchange_rate_price // self.coin_precision
+        precision = exchange_rate_price / self.coin_precision
         print(f"Oracle exchange rate: {precision} tADA/tUSDT")
         return (amount_a * exchange_rate_price) // self.coin_precision
 

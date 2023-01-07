@@ -102,7 +102,10 @@ class ChainQuery(BlockFrostChainContext):
         collateral_builder.add_input_address(target_address)
         collateral_builder.add_output(TransactionOutput(target_address, 5000000))
 
-        print("Creating collateral UTXO with pure ADAs...")
+        print(
+            """UTXO to cover collateral not found.
+        Submitting collateral transaction..."""
+        )
         self.submit_tx_without_print(
             collateral_builder.build_and_sign([skey], target_address)
         )

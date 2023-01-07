@@ -193,7 +193,7 @@ elif args.subparser_main_name == "user" and args.liquidity:
     tUSDT = swapInstance.available_user_tusdt(user_address)
     print(
         f"""User wallet's liquidity:
-    * {tlovelace} tlovelace.
+    * {tlovelace // 1000000} tADA ({tlovelace} tlovelace).
     * {tUSDT} tUSDT."""
     )
 elif args.subparser_main_name == "user" and args.address:
@@ -204,7 +204,7 @@ elif args.subparser_main_name == "swap-contract" and args.liquidity:
     tUSDT = swapInstance.add_asset_swap_amount(0)
     print(
         f"""Swap contract liquidity:
-    * {tlovelace} tlovelace.
+    * {tlovelace // 1000000} tADA ({tlovelace} tlovelace).
     * {tUSDT} tUSDT."""
     )
 elif args.subparser_main_name == "swap-contract" and args.address:
