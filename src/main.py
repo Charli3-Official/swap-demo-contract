@@ -1,4 +1,6 @@
 import cbor2
+import argparse
+import wallet as w
 from lib.chain_query import ChainQuery
 from swap import SwapContract, Swap
 from pycardano import (
@@ -11,7 +13,6 @@ from pycardano import (
     plutus_script_hash,
 )
 from datetime import datetime
-import argparse
 
 # Environment's settings
 BLOCKFROST_PROJECT_ID = "preprod0kc9ZbgLbwq7XcMtPKM4olGnedkOp2Vn"
@@ -48,10 +49,12 @@ if plutus_script_hash(swap_script) != swap_script_hash:
 # node_verification_key.save("node.vkey")
 
 # Load user payment key
-extendend_payment_skey = PaymentSigningKey.load("./credentials/node.skey")
+# extendend_payment_skey = PaymentSigningKey.load("./credentials/node.skey")
+extendend_payment_skey = w.user_esk()
 extendend_payment_vkey = PaymentVerificationKey.load("./credentials/node.vkey")
 
-user_address = Address(payment_part=extendend_payment_vkey.hash(), network=NETWORK_MODE)
+# user_address = Address(payment_part=extendend_payment_vkey.hash(), network=NETWORK_MODE)
+user_address = w.user_address()
 
 # Oracle feed nft identity
 oracle_nft = MultiAsset.from_primitive(
@@ -197,7 +200,8 @@ elif args.subparser_main_name == "user" and args.liquidity:
     * {tUSDT} tUSDT."""
     )
 elif args.subparser_main_name == "user" and args.address:
-    print(f"User's wallet address: {user_address}")
+    # print(f"User's wallet address: {user_address}")
+    print(f"User's wallet address (Mnemonic): {w.user_address()}")
 elif args.subparser_main_name == "swap-contract" and args.liquidity:
     swapInstance = SwapContract(context, oracle_nft, oracle_address, swap_address, swap)
     tlovelace = swapInstance.get_swap_utxo().output.amount.coin

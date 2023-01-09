@@ -117,7 +117,7 @@ class SwapContract:
                 .reference_inputs.add(oracle_feed_utxo.input)
             )
 
-            print(f"Exchanging {amountA} tUSDT for {amountB} tADA.")
+            print(f"Exchanging {amountA} lovelace for {amountB} tADA.")
             self.submit_tx_builder(builder, sk, user_address)
             print(
                 f"""Updated swap contract liquidity:
