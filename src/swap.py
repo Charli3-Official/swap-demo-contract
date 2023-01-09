@@ -238,6 +238,22 @@ class SwapContract:
         )
         return oracle_inline_datum.price_data.get_price()
 
+    def get_oracle_timestamp(self) -> int:
+        """Get the oracle's feed exchange rate"""
+        oracle_feed_utxo = self.get_oracle_utxo()
+        oracle_inline_datum: GenericData = GenericData.from_cbor(
+            oracle_feed_utxo.output.datum.cbor
+        )
+        return oracle_inline_datum.price_data.get_timestamp()
+
+    def get_oracle_expiration(self) -> int:
+        """Get the oracle's feed exchange rate"""
+        oracle_feed_utxo = self.get_oracle_utxo()
+        oracle_inline_datum: GenericData = GenericData.from_cbor(
+            oracle_feed_utxo.output.datum.cbor
+        )
+        return oracle_inline_datum.price_data.get_expiry()
+
     def get_oracle_utxo(self) -> pyc.UTxO:
         """Get oracle's feed utxo using nft idenfier"""
         oracle_utxos = self.context.utxos(str(self.oracle_addr))

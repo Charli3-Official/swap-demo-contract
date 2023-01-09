@@ -211,10 +211,15 @@ elif args.subparser_main_name == "swap-contract" and args.address:
     print(f"Swap contract's address: {swap_address}")
 elif args.subparser_main_name == "oracle-contract" and args.feed:
     swapInstance = SwapContract(context, oracle_nft, oracle_address, swap_address, swap)
-    now = datetime.now()
-    current_time = now.strftime("%H:%M:%S")
+    exchange = swapInstance.get_oracle_exchange_rate()
+    generated_time = datetime.utcfromtimestamp(
+        swapInstance.get_oracle_timestamp()
+    ).strftime("%Y-%m-%d %H:%M:%S")
+    expiration_time = datetime.utcfromtimestamp(
+        swapInstance.get_oracle_expiration()
+    ).strftime("%Y-%m-%d %H:%M:%S")
     print(
-        f"Oracle feed: Exchange rate tADA/tUSDt {swapInstance.get_oracle_exchange_rate()} at {current_time}"
+        f"Oracle feed:\n* Exchange rate tADA/tUSDt {exchange/1000000}\n* Generated data at: {generated_time}\n* Expiration data at: {expiration_time}"
     )
 elif args.subparser_main_name == "oracle-contract" and args.address:
     print(f"Oracle contract's address: {oracle_address}")
