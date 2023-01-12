@@ -257,20 +257,18 @@ class SwapContract:
     def get_oracle_utxo(self) -> pyc.UTxO:
         """Get oracle's feed utxo using nft idenfier"""
         oracle_utxos = self.context.utxos(str(self.oracle_addr))
-        [oracle_utxo_nft] = filter(
-            lambda x: x.output.amount.multi_asset >= self.oracle_nft,
-            oracle_utxos,
-        )
+        oracle_utxo_nft = next((x for x in oracle_utxos if x.output.amount.multi_asset >= self.oracle_nft), None)
+        if oracle_utxo_nft is None:
+            raise ValueError("Oracle UTXO not found with NFT identifier")
         return oracle_utxo_nft
 
     def get_swap_utxo(self) -> pyc.UTxO:
         """Get swap's utxo using nft identifier"""
         swap_utxos = self.context.utxos(str(self.swap_addr))
-        [swap_utxo_nft] = filter(
-            lambda x: x.output.amount.multi_asset >= self.swap.swap_nft,
-            swap_utxos,
-        )
-        return swap_utxo_nft
+        matching_utxos = [x for x in swap_utxos if x.output.amount.multi_asset >= self.swap.swap_nft]
+        if not matching_utxos:
+            raise ValueError("No matching utxo found for swap nft.")
+        return matching_utxos[0]
 
     def decrease_asset_swap(self, selling_amount: int) -> pyc.MultiAsset:
         """The updated swap asset to be decreased at the address"""
