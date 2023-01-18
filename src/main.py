@@ -26,10 +26,13 @@ oracle_address = Address.from_primitive(
 )
 
 # Custom contract address (swap contract)
-swap_address = Address.from_primitive(
-    "addr_test1wqhsrhfqs6xv9g39mraau2jwnaqd7utt9x50d5sfmlz972spwd66j"
-)
+# swap_address = Address.from_primitive(
+#     "addr_test1wqhsrhfqs6xv9g39mraau2jwnaqd7utt9x50d5sfmlz972spwd66j"
+# )
 
+swap_address = Address.from_primitive(
+    "addr_test1wrcraeyfdkurcz286jaq02hdj5krntc47074vky5j8suhpqew37jy"
+)
 # Blockfrost's settings
 context = ChainQuery(
     BLOCKFROST_PROJECT_ID,
@@ -72,8 +75,11 @@ oracle_nft = MultiAsset.from_primitive(
 )
 
 # Swap nft identity
+# swap_nft = MultiAsset.from_primitive(
+#     {"ce9d1f8f464e1e930f19ae89ccab3de93d11ee5518eed15d641f6693": {b"SWAP": 1}}
+# )
 swap_nft = MultiAsset.from_primitive(
-    {"ce9d1f8f464e1e930f19ae89ccab3de93d11ee5518eed15d641f6693": {b"SWAP": 1}}
+    {"38f143722e0a340027510587d81e49b90904c10fb8271eca13913cd6": {b"SWAP": 1}}
 )
 
 # Swap asset information

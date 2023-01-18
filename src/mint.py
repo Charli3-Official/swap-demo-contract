@@ -45,11 +45,11 @@ class Mint:
     def mint_nft_with_script(self):
         """mint tokens with plutus v2 script"""
         policy_id = plutus_script_hash(self.minting_script_plutus_v2)
-
+        asset_name = "SWAP3-PYCARDANO"
         nft_swap = MultiAsset.from_primitive(
             {
                 policy_id.payload: {
-                    b"SWAP-PYCARDANO": 1,
+                    bytes(asset_name, "utf-8"): 1,
                 }
             }
         )
@@ -59,15 +59,14 @@ class Mint:
                 policy_id.payload.hex(): {
                     "Swap": {
                         "description": "This is a test token",
-                        "name": "SWAP-PYCARDANO",
+                        "name": asset_name,
                     }
                 }
             }
         }
-        swapToken = metadata[0][policy_id.payload.hex()]["Swap"]["name"]
 
         print(
-            f"Swap's NFT information:\nCurrency Symbol (Policy ID): {policy_id.payload.hex()}\nToken Name: {swapToken}"
+            f"Swap's NFT information:\nCurrency Symbol (Policy ID): {policy_id.payload.hex()}\nToken Name: {asset_name}"
         )
         # Place metadata in AuxiliaryData, the format acceptable by a transaction.
         auxiliary_data = AuxiliaryData(AlonzoMetadata(metadata=Metadata(metadata)))
@@ -95,7 +94,9 @@ class Mint:
         min_lovelace_amount = Value(multi_asset=nft_swap)
 
         min_lovelace_output_utxo = TransactionOutput(
-            address=self.swap_address, amount=min_lovelace_amount
+            address=self.swap_address,
+            amount=min_lovelace_amount,
+            datum=PlutusData(),
         )
         min_lovelace = utils.min_lovelace_post_alonzo(
             min_lovelace_output_utxo, self.context
@@ -105,7 +106,7 @@ class Mint:
         value_swap_utxo = Value(coin=min_lovelace, multi_asset=nft_swap)
         # Send the NFT to our own address
         swap_nft_output = TransactionOutput(
-            address=self.swap_address, amount=value_swap_utxo
+            address=self.swap_address, amount=value_swap_utxo, datum=PlutusData()
         )
 
         builder.add_output(swap_nft_output)

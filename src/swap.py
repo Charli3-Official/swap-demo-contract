@@ -1,7 +1,7 @@
 import pycardano as pyc
 from lib.chain_query import ChainQuery
 
-from lib.datums import GenericData
+from lib.datums import GenericData, Nothing
 from lib.redeemers import AddLiquidity, SwapA, SwapB
 
 
@@ -73,13 +73,15 @@ class SwapContract:
         )
 
         updated_swap_utxo = pyc.TransactionOutput(
-            address=swap_address, amount=swap_value
+            address=swap_address, amount=swap_value, datum=pyc.PlutusData()
         )
 
         builder = pyc.TransactionBuilder(self.context)
         (
             builder.add_script_input(
-                utxo=swap_utxo, script=script, redeemer=swap_redeemer
+                utxo=swap_utxo,
+                script=script,
+                redeemer=swap_redeemer,
             )
             .add_input_address(user_address)
             .add_output(updated_swap_utxo)
@@ -244,7 +246,9 @@ class SwapContract:
             builder = pyc.TransactionBuilder(self.context)
             (
                 builder.add_script_input(
-                    utxo=swap_utxo, script=script, redeemer=swap_redeemer
+                    utxo=swap_utxo,
+                    script=script,
+                    redeemer=swap_redeemer,
                 )
                 .add_input_address(user_address)
                 .add_output(new_output_utxo_user)
@@ -253,7 +257,6 @@ class SwapContract:
             )
 
             print(f"Exchanging {amountB} tADA for {amountA} tUSDT.")
-            print(builder)
             self.submit_tx_builder(builder, sk, user_address)
             print(
                 f"""Updated swap contract liquidity:
@@ -454,5 +457,6 @@ class SwapContract:
             non_nft_utxo = self.context.find_collateral(address)
 
         builder.collaterals.append(non_nft_utxo)
+        # print(builder)
         signed_tx = builder.build_and_sign([sk], change_address=address)
         self.context.submit_tx_without_print(signed_tx)
