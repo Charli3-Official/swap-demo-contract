@@ -2,6 +2,7 @@ import cbor2
 import argparse
 import wallet as w
 from lib.chain_query import ChainQuery
+from mint import Mint
 from swap import SwapContract, Swap
 from pycardano import (
     Network,
@@ -25,10 +26,13 @@ oracle_address = Address.from_primitive(
 )
 
 # Custom contract address (swap contract)
-swap_address = Address.from_primitive(
-    "addr_test1wqhsrhfqs6xv9g39mraau2jwnaqd7utt9x50d5sfmlz972spwd66j"
-)
+# swap_address = Address.from_primitive(
+#     "addr_test1wqhsrhfqs6xv9g39mraau2jwnaqd7utt9x50d5sfmlz972spwd66j"
+# )
 
+swap_address = Address.from_primitive(
+    "addr_test1wrcraeyfdkurcz286jaq02hdj5krntc47074vky5j8suhpqew37jy"
+)
 # Blockfrost's settings
 context = ChainQuery(
     BLOCKFROST_PROJECT_ID,
@@ -42,6 +46,11 @@ swap_script = context._get_script(str(swap_script_hash))
 if plutus_script_hash(swap_script) != swap_script_hash:
     swap_script = PlutusV2Script(cbor2.dumps(swap_script))
 
+# Reading minting script
+with open("./utils/scripts/mint_script.plutus", "r") as f:
+    script_hex = f.read()
+    plutus_script_v2 = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
+
 # User payment key generation
 # node_signing_key = PaymentSigningKey.generate()
 # node_signing_key.save("node.skey")
@@ -49,11 +58,11 @@ if plutus_script_hash(swap_script) != swap_script_hash:
 # node_verification_key.save("node.vkey")
 
 # Load user payment key
-# extendend_payment_skey = PaymentSigningKey.load("./credentials/node.skey")
-extendend_payment_skey = w.user_esk()
-extendend_payment_vkey = PaymentVerificationKey.load("./credentials/node.vkey")
+# extended_payment_skey = PaymentSigningKey.load("./credentials/node.skey")
+extended_payment_skey = w.user_esk()
+extended_payment_vkey = PaymentVerificationKey.load("./credentials/node.vkey")
 
-# user_address = Address(payment_part=extendend_payment_vkey.hash(), network=NETWORK_MODE)
+# user_address = Address(payment_part=extended_payment_vkey.hash(), network=NETWORK_MODE)
 user_address = w.user_address()
 
 # Oracle feed nft identity
@@ -66,8 +75,11 @@ oracle_nft = MultiAsset.from_primitive(
 )
 
 # Swap nft identity
+# swap_nft = MultiAsset.from_primitive(
+#     {"ce9d1f8f464e1e930f19ae89ccab3de93d11ee5518eed15d641f6693": {b"SWAP": 1}}
+# )
 swap_nft = MultiAsset.from_primitive(
-    {"ce9d1f8f464e1e930f19ae89ccab3de93d11ee5518eed15d641f6693": {b"SWAP": 1}}
+    {"38f143722e0a340027510587d81e49b90904c10fb8271eca13913cd6": {b"SWAP": 1}}
 )
 
 # Swap asset information
@@ -149,6 +161,23 @@ swap_parser.add_argument(
     action="store_true",
     help="Print the swap contract address.",
 )
+
+swap_parser.add_argument(
+    "--add-liquidity",
+    nargs=2,
+    action="store",
+    dest="addliquidity",
+    metavar=("tUSDT", "tADA"),
+    type=int,
+    help="Add asset liquidity at swap UTXO.",
+)
+
+swap_parser.add_argument(
+    "--start-swap",
+    dest="soracle",
+    action="store_true",
+    help="Generate a UTXO and mint an NFT at the specified swap contract address.",
+)
 # Create a parser for the "oracle-contract" choice
 oracle_parser = subparsers.add_parser(
     "oracle-contract",
@@ -177,7 +206,7 @@ if args.subparser_main_name == "trade" and args.subparser_trade_name == "tADA":
         user_address,
         swap_address,
         swap_script,
-        extendend_payment_skey,
+        extended_payment_skey,
     )
 
 elif args.subparser_main_name == "trade" and args.subparser_trade_name == "tUSDT":
@@ -187,7 +216,7 @@ elif args.subparser_main_name == "trade" and args.subparser_trade_name == "tUSDT
         user_address,
         swap_address,
         swap_script,
-        extendend_payment_skey,
+        extended_payment_skey,
     )
 
 elif args.subparser_main_name == "user" and args.liquidity:
@@ -213,6 +242,22 @@ elif args.subparser_main_name == "swap-contract" and args.liquidity:
     )
 elif args.subparser_main_name == "swap-contract" and args.address:
     print(f"Swap contract's address: {swap_address}")
+elif args.subparser_main_name == "swap-contract" and args.addliquidity:
+    swapInstance = SwapContract(context, oracle_nft, oracle_address, swap_address, swap)
+    swapInstance.add_liquidity(
+        args.addliquidity[0],
+        args.addliquidity[1],
+        user_address,
+        swap_address,
+        swap_script,
+        extended_payment_skey,
+    )
+elif args.subparser_main_name == "swap-contract" and args.soracle:
+    swap_utxo_nft = Mint(
+        context, extended_payment_skey, user_address, swap_address, plutus_script_v2
+    )
+    swap_utxo_nft.mint_nft_with_script()
+
 elif args.subparser_main_name == "oracle-contract" and args.feed:
     swapInstance = SwapContract(context, oracle_nft, oracle_address, swap_address, swap)
     exchange = swapInstance.get_oracle_exchange_rate()

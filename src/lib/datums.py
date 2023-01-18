@@ -6,6 +6,11 @@ from pycardano.serialization import IndefiniteList
 
 
 @dataclass
+class Nothing(PlutusData):
+    CONSTR_ID = 1
+
+
+@dataclass
 class PriceData(PlutusData):
     """represents cip oracle datum PriceMap(Tag +2)"""
 

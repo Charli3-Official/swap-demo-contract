@@ -1,8 +1,8 @@
 import pycardano as pyc
 from lib.chain_query import ChainQuery
 
-from lib.datums import GenericData
-from lib.redeemers import SwapA, SwapB
+from lib.datums import GenericData, Nothing
+from lib.redeemers import AddLiquidity, SwapA, SwapB
 
 
 class Swap:
@@ -47,6 +47,52 @@ class SwapContract:
         self.coin_precision = 1000000
         self.swap = swap
         self.oracle_nft = oracle_nft
+
+    def add_liquidity(
+        self,
+        amountA: int,
+        amountB: int,
+        user_address: pyc.Address,
+        swap_address: pyc.Address,
+        script: bytes,
+        sk: pyc.PaymentSigningKey,
+    ):
+
+        swap_utxo = self.get_swap_utxo()
+
+        updated_massetA_for_swap_utxo = self.add_asset_swap(amountA)
+        updated_amountA_for_swap_utxo = self.add_asset_swap_amount(amountA)
+
+        updated_amountB_for_swap_utxo = swap_utxo.output.amount.coin + amountB * 1000000
+
+        swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, AddLiquidity())
+
+        swap_value = pyc.transaction.Value(
+            coin=updated_amountB_for_swap_utxo,
+            multi_asset=updated_massetA_for_swap_utxo,
+        )
+
+        updated_swap_utxo = pyc.TransactionOutput(
+            address=swap_address, amount=swap_value, datum=pyc.PlutusData()
+        )
+
+        builder = pyc.TransactionBuilder(self.context)
+        (
+            builder.add_script_input(
+                utxo=swap_utxo,
+                script=script,
+                redeemer=swap_redeemer,
+            )
+            .add_input_address(user_address)
+            .add_output(updated_swap_utxo)
+        )
+
+        self.submit_tx_builder(builder, sk, user_address)
+        print(
+            f"""Updated swap contract liquidity:
+            * {updated_amountB_for_swap_utxo} tlovelaces.
+            * {updated_amountA_for_swap_utxo} tUSDT."""
+        )
 
     def swap_A(
         self,
@@ -200,7 +246,9 @@ class SwapContract:
             builder = pyc.TransactionBuilder(self.context)
             (
                 builder.add_script_input(
-                    utxo=swap_utxo, script=script, redeemer=swap_redeemer
+                    utxo=swap_utxo,
+                    script=script,
+                    redeemer=swap_redeemer,
                 )
                 .add_input_address(user_address)
                 .add_output(new_output_utxo_user)
@@ -255,20 +303,22 @@ class SwapContract:
         return oracle_inline_datum.price_data.get_expiry()
 
     def get_oracle_utxo(self) -> pyc.UTxO:
-        """Get oracle's feed utxo using nft idenfier"""
+        """Retrieve the oracle's feed UTXO using the NFT identifier."""
         oracle_utxos = self.context.utxos(str(self.oracle_addr))
-        oracle_utxo_nft = next((x for x in oracle_utxos if x.output.amount.multi_asset >= self.oracle_nft), None)
-        if oracle_utxo_nft is None:
-            raise ValueError("Oracle UTXO not found with NFT identifier")
+        oracle_utxo_nft = next(
+            utxo
+            for utxo in oracle_utxos
+            if utxo.output.amount.multi_asset == self.oracle_nft
+        )
         return oracle_utxo_nft
 
     def get_swap_utxo(self) -> pyc.UTxO:
-        """Get swap's utxo using nft identifier"""
+        """Retrieve the UTxO for the swap using the NFT identifier"""
         swap_utxos = self.context.utxos(str(self.swap_addr))
-        matching_utxos = [x for x in swap_utxos if x.output.amount.multi_asset >= self.swap.swap_nft]
-        if not matching_utxos:
-            raise ValueError("No matching utxo found for swap nft.")
-        return matching_utxos[0]
+        swap_utxo_nft = next(
+            x for x in swap_utxos if x.output.amount.multi_asset >= self.swap.swap_nft
+        )
+        return swap_utxo_nft
 
     def decrease_asset_swap(self, selling_amount: int) -> pyc.MultiAsset:
         """The updated swap asset to be decreased at the address"""
@@ -407,5 +457,6 @@ class SwapContract:
             non_nft_utxo = self.context.find_collateral(address)
 
         builder.collaterals.append(non_nft_utxo)
+        # print(builder)
         signed_tx = builder.build_and_sign([sk], change_address=address)
         self.context.submit_tx_without_print(signed_tx)
