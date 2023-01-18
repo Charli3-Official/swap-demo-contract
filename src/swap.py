@@ -59,40 +59,48 @@ class SwapContract:
     ):
 
         swap_utxo = self.get_swap_utxo()
-
-        updated_massetA_for_swap_utxo = self.add_asset_swap(amountA)
-        updated_amountA_for_swap_utxo = self.add_asset_swap_amount(amountA)
-
-        updated_amountB_for_swap_utxo = swap_utxo.output.amount.coin + amountB * 1000000
-
-        swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, AddLiquidity())
-
-        swap_value = pyc.transaction.Value(
-            coin=updated_amountB_for_swap_utxo,
-            multi_asset=updated_massetA_for_swap_utxo,
-        )
-
-        updated_swap_utxo = pyc.TransactionOutput(
-            address=swap_address, amount=swap_value, datum=pyc.PlutusData()
-        )
-
-        builder = pyc.TransactionBuilder(self.context)
-        (
-            builder.add_script_input(
-                utxo=swap_utxo,
-                script=script,
-                redeemer=swap_redeemer,
+        available_user_tADA = self.available_user_tlovelace(user_address) // 1000000
+        available_user_tUSDT = self.available_user_tusdt(user_address)
+        if  available_user_tADA < amountB or available_user_tUSDT < amountA:
+            print(
+                f"""Error! The user's wallet  doesn't have enough liquidity!
+            Available: {available_user_tUSDT} tUSDT, {available_user_tADA} tADA"""
             )
-            .add_input_address(user_address)
-            .add_output(updated_swap_utxo)
-        )
+        else:
+            updated_massetA_for_swap_utxo = self.add_asset_swap(amountA)
+            updated_amountA_for_swap_utxo = self.add_asset_swap_amount(amountA)
 
-        self.submit_tx_builder(builder, sk, user_address)
-        print(
-            f"""Updated swap contract liquidity:
-            * {updated_amountB_for_swap_utxo} tlovelaces.
-            * {updated_amountA_for_swap_utxo} tUSDT."""
-        )
+            updated_amountB_for_swap_utxo = swap_utxo.output.amount.coin + amountB * 1000000
+
+            swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, AddLiquidity())
+
+            swap_value = pyc.transaction.Value(
+                coin=updated_amountB_for_swap_utxo,
+                multi_asset=updated_massetA_for_swap_utxo,
+            )
+
+            updated_swap_utxo = pyc.TransactionOutput(
+                address=swap_address, amount=swap_value, datum=pyc.PlutusData()
+            )
+
+            builder = pyc.TransactionBuilder(self.context)
+            (
+                builder.add_script_input(
+                    utxo=swap_utxo,
+                    script=script,
+                    redeemer=swap_redeemer,
+                )
+                .add_input_address(user_address)
+                .add_output(updated_swap_utxo)
+            )
+
+            self.submit_tx_builder(builder, sk, user_address)
+
+            print(
+                f"""Updated swap contract liquidity:
+                * {updated_amountB_for_swap_utxo} tlovelaces.
+                * {updated_amountA_for_swap_utxo} tUSDT."""
+            )
 
     def swap_A(
         self,
