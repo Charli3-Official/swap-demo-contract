@@ -1,3 +1,4 @@
+
 <!-- Improved compatibility of back to top link: See: https://github.com/othneildrew/Best-README-Template/pull/73 -->
 <a name="readme-top"></a>
 <!--
@@ -102,15 +103,15 @@ The required packages can be installed using pip with the following command:
    git clone https://github.com/Charli3-Official/swap-pycardano.git
    ```
 3. Enter your API and select your base Blockfrost's URL in `main.py`.
-
    ```py
-  #Blockfrost's settings
-  BLOCKFROST_PROJECT_ID = os.environ.get('BLOCKFROST_PROJECT_ID')
-  BLOCKFROST_BASE_URL = os.environ.get('BLOCFROST_BASE_URL');
+   #Blockfrost's settings
+   BLOCKFROST_PROJECT_ID = os.environ.get('BLOCKFROST_PROJECT_ID')
+   BLOCKFROST_BASE_URL = os.environ.get('BLOCFROST_BASE_URL')
    ```
 4. Create and configure the 24-words mnemonic wallet passphrase.
 
   ```py
+  #Wallet 24 word passphase
   MNEMONIC_24 = os.environ.get('24_WALLET_PASSPHRASE')
    ```
 
@@ -120,7 +121,7 @@ The required packages can be installed using pip with the following command:
 
 
 ## Usage
-The project has a command line interface to easily submit transactions. To access it, first navigate to the src directory. Then, run the command python `main.py -h` to display helpful information on how to use the command line options.
+The project has a command line interface to easily submit transactions. To access it, first navigate to the `src` directory. Then, run the command python `main.py -h` to display helpful information on how to use the command line options.
 
     usage: python main.py [-h] {trade,user,swap-contract,oracle-contract} ...
 
