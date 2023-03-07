@@ -1,3 +1,4 @@
+import os
 from pycardano import (
     HDWallet,
     Address,
@@ -7,9 +8,7 @@ from pycardano import (
     PaymentSigningKey,
 )
 
-# MNEMONIC_24 = "net subject gown ask suspect mango hammer picnic bridge interest world neglect salon cycle crater fat grocery sausage harvest poverty hurt zone arrow slow"
-MNEMONIC_24 = "atom during negative faculty enable brand limb jaguar stumble again exchange bleak over chimney tide slice parent possible answer relax rebuild civil puzzle catalog"
-
+MNEMONIC_24 = os.environ.get("24_WALLET_PASSPHRASE")
 
 def user_address() -> Address:
     hdwallet = HDWallet.from_mnemonic(MNEMONIC_24)
