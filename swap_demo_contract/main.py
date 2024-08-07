@@ -317,13 +317,11 @@ async def display(args, context):
         swapInstance = SwapContract(
             context, oracle_nft, oracle_address, swap_address, swap
         )
-        tlovelace = swapInstance.available_user_tlovelace(user_address)
-        tUSDT = swapInstance.available_user_tusdt(user_address)
-        print(
-            f"""User wallet's liquidity:
-        * {tlovelace // 1000000} tADA ({tlovelace} tlovelace).
-        * {tUSDT} tUSDT."""
-        )
+        tlovelace = await swapInstance.available_user_tlovelace(user_address)
+        tUSDT = await swapInstance.available_user_tusdt(user_address)
+        print("User wallet's liquidity:")
+        print(f"- {tlovelace // 1000000} tADA ({tlovelace} tlovelace)")
+        print(f"- {tUSDT} tUSDT")
     elif args.subparser == "user" and args.address:
         print(f"User's wallet address (Mnemonic): {w.user_address()}")
 
@@ -331,13 +329,13 @@ async def display(args, context):
         swapInstance = SwapContract(
             context, oracle_nft, oracle_address, swap_address, swap
         )
-        tlovelace = swapInstance.get_swap_utxo().output.amount.coin
-        tUSDT = swapInstance.add_asset_swap_amount(0)
-        print(
-            f"""Swap contract liquidity:
-        * {tlovelace // 1000000} tADA ({tlovelace} tlovelace).
-        * {tUSDT} tUSDT."""
-        )
+        swap_utxo = await swapInstance.get_swap_utxo()
+        tlovelace = swap_utxo.output.amount.coin
+        tUSDT = await swapInstance.add_asset_swap_amount(0)
+        print("Swap contract liquidity:")
+        print(f"- {tlovelace // 1000000} tADA ({tlovelace} tlovelace)")
+        print(f"- {tUSDT} tUSDT")
+
     elif args.subparser == "swap-contract" and args.address:
 
         print(f"Swap contract's address: {swap_address}")
@@ -346,7 +344,7 @@ async def display(args, context):
         swapInstance = SwapContract(
             context, oracle_nft, oracle_address, swap_address, swap
         )
-        swapInstance.add_liquidity(
+        await swapInstance.add_liquidity(
             args.addliquidity[0],
             args.addliquidity[1],
             user_address,
