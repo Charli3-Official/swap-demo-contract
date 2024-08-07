@@ -7,9 +7,9 @@ https://docs.charli3.io/charli3s-documentation/oracle-feeds-datum-standard
 """
 
 from dataclasses import dataclass
+
 from pycardano import PlutusData
 from pycardano.serialization import IndefiniteList
-
 
 # ------------------------------#
 #         Network Feed          #

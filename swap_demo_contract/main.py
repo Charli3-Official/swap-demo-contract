@@ -1,26 +1,26 @@
 import argparse
-import yaml
-import ogmios
-import sys
-import cbor2
+import asyncio
 import os
-
+import sys
 from datetime import datetime
+
+import cbor2
+import ogmios
+import yaml
 from charli3_offchain_core.backend.kupo import KupoContext
 from charli3_offchain_core.chain_query import ChainQuery
 from pycardano import (
     Address,
+    BlockFrostChainContext,
     MultiAsset,
     Network,
     PlutusV2Script,
     plutus_script_hash,
-    BlockFrostChainContext,
 )
-
 
 from . import wallet as w
 from .mint import Mint
-from .swap import SwapContract, Swap
+from .swap import Swap, SwapContract
 
 
 def load_contracts_addresses():
@@ -42,12 +42,12 @@ def load_config():
         sys.exit(1)
 
 
-def validate_config(config, service, required_keys):
-    """Validates that all required keys exist for a service configuration."""
-    if service not in config or not all(
-        key in config[service] for key in required_keys
+def validate_config(config, connection, required_keys):
+    """Validates that all required keys exist for a connection configuration."""
+    if connection not in config or not all(
+        key in config[connection] for key in required_keys
     ):
-        raise ValueError(f"Context for {service} not found or is incomplete.")
+        raise ValueError(f"Context for {connection} not found or is incomplete.")
 
 
 def context(args) -> ChainQuery:
@@ -57,24 +57,25 @@ def context(args) -> ChainQuery:
     kupo_context = None
 
     configyaml = load_config()
-    network = Network.TESTNET
-    # if args.environment == "tesnet":
-    #     network = Network.TESTNET
-    # else:
-    #     network = Network.MAINNET
 
-    if args.service == "blockfrost":
+    if args.environment == "mainnet":
+        network = Network.MAINNET
+    elif args.environment == "preprod":
+        network = Network.TESTNET
+    else:
+        network = None
+
+    if args.connection == "blockfrost":
         required_keys = ["project_id"]
-        validate_config(configyaml, args.service, required_keys)
+        validate_config(configyaml, args.connection, required_keys)
 
         blockfrost_context = BlockFrostChainContext(
-            project_id=configyaml[args.service].get("project_id", ""),
-            network=network,
+            project_id=configyaml[args.connection].get("project_id", ""),
             base_url=None,
         )
-    elif args.service == "ogmios":
+    elif args.connection == "ogmios":
         required_keys = ["kupo_url", "ws_url"]
-        validate_config(configyaml, args.service, required_keys)
+        validate_config(configyaml, args.connection, required_keys)
 
         ogmios_ws_url = configyaml["ogmios"]["ws_url"]
         kupo_url = configyaml["ogmios"]["kupo_url"]
@@ -119,7 +120,7 @@ with open(mint_script_path, "r") as f:
 # Load user payment key
 # extended_payment_skey = PaymentSigningKey.load("./credentials/node.skey")
 # extended_payment_vkey = PaymentVerificationKey.load("./credentials/node.vkey")
-#
+
 # Load user payment key grom wallet file
 extended_payment_skey = w.user_esk()
 
@@ -128,11 +129,7 @@ user_address = w.user_address()
 
 # Oracle feed NFT identity
 oracle_nft = MultiAsset.from_primitive(
-    {
-        "8fe2ef24b3cc8882f01d9246479ef6c6fc24a6950b222c206907a8be": {
-            b"InlineOracleFeed": 1
-        }
-    }
+    {"a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f": {b"OracleFeed": 1}}
 )
 
 # Swap NFT identity
@@ -148,10 +145,6 @@ tUSDT = MultiAsset.from_primitive(
 # swap instance
 swap = Swap(swap_nft, tUSDT)
 
-# ----------------------------- #
-#         Parser Section        #
-# ------------------------------#
-
 
 def create_parser():
     parser = argparse.ArgumentParser(
@@ -162,6 +155,24 @@ def create_parser():
         "exchange rate between tADA and tUSDT to sell or buy assets from a swap "
         "contract in the test environment of preproduction. ",
         epilog="Copyrigth: (c) 2020 - 2024 Charli3",
+    )
+
+    # Service to connect to the blockchain
+    parser.add_argument(
+        "connection",
+        choices=["blockfrost", "ogmios"],
+        nargs="?",
+        default="blockfrost",
+        help="External service to read blockhain information",
+    )
+
+    # Service to connect to the blockchain
+    parser.add_argument(
+        "environment",
+        choices=["preprod", "mainnet"],
+        nargs="?",
+        default="preprod",
+        help="Blockchain environment",
     )
 
     # Create a subparser for each main choice
@@ -277,12 +288,12 @@ def create_parser():
 
 
 # Parser command-line arguments
-def display(args, context):
-    if args.subparser == "trade" and args.subparser_trade_name == "tADA":
+async def display(args, context):
+    if args.subparser == "trade" and args.subparser_trade_subparser == "tADA":
         swapInstance = SwapContract(
             context, oracle_nft, oracle_address, swap_address, swap
         )
-        swapInstance.swap_B(
+        await swapInstance.swap_B(
             args.amount,
             user_address,
             swap_address,
@@ -290,11 +301,11 @@ def display(args, context):
             extended_payment_skey,
         )
 
-    elif args.subparser_main_name == "trade" and args.subparser_trade_name == "tUSDT":
+    elif args.subparser == "trade" and args.subparser_trade_subparser == "tUSDT":
         swapInstance = SwapContract(
             context, oracle_nft, oracle_address, swap_address, swap
         )
-        swapInstance.swap_A(
+        await swapInstance.swap_A(
             args.amount,
             user_address,
             swap_address,
@@ -302,7 +313,7 @@ def display(args, context):
             extended_payment_skey,
         )
 
-    elif args.subparser_main_name == "user" and args.liquidity:
+    elif args.subparser == "user" and args.liquidity:
         swapInstance = SwapContract(
             context, oracle_nft, oracle_address, swap_address, swap
         )
@@ -313,9 +324,10 @@ def display(args, context):
         * {tlovelace // 1000000} tADA ({tlovelace} tlovelace).
         * {tUSDT} tUSDT."""
         )
-    elif args.subparser_main_name == "user" and args.address:
+    elif args.subparser == "user" and args.address:
         print(f"User's wallet address (Mnemonic): {w.user_address()}")
-    elif args.subparser_main_name == "swap-contract" and args.liquidity:
+
+    elif args.subparser == "swap-contract" and args.liquidity:
         swapInstance = SwapContract(
             context, oracle_nft, oracle_address, swap_address, swap
         )
@@ -326,9 +338,11 @@ def display(args, context):
         * {tlovelace // 1000000} tADA ({tlovelace} tlovelace).
         * {tUSDT} tUSDT."""
         )
-    elif args.subparser_main_name == "swap-contract" and args.address:
+    elif args.subparser == "swap-contract" and args.address:
+
         print(f"Swap contract's address: {swap_address}")
-    elif args.subparser_main_name == "swap-contract" and args.addliquidity:
+
+    elif args.subparser == "swap-contract" and args.addliquidity:
         swapInstance = SwapContract(
             context, oracle_nft, oracle_address, swap_address, swap
         )
@@ -340,29 +354,26 @@ def display(args, context):
             swap_script,
             extended_payment_skey,
         )
-    elif args.subparser_main_name == "swap-contract" and args.soracle:
+    elif args.subparser == "swap-contract" and args.soracle:
         swap_utxo_nft = Mint(
             context, extended_payment_skey, user_address, swap_address, plutus_script_v2
         )
         swap_utxo_nft.mint_nft_with_script()
 
-    elif args.subparser_main_name == "oracle-contract" and args.feed:
-        swapInstance = SwapContract(
-            context, oracle_nft, oracle_address, swap_address, swap
-        )
-        exchange = swapInstance.get_oracle_exchange_rate()
-        generated_time = datetime.utcfromtimestamp(
-            swapInstance.get_oracle_timestamp()
-        ).strftime("%Y-%m-%d %H:%M:%S")
-        expiration_time = datetime.utcfromtimestamp(
-            swapInstance.get_oracle_expiration()
-        ).strftime("%Y-%m-%d %H:%M:%S")
-        print(
-            f"Oracle feed:\n* Exchange rate tADA/tUSDt {exchange/1000000}\n* "
-            "Generated data at: {generated_time}\n* Expiration data "
-            "at: {expiration_time}"
-        )
-    elif args.subparser_main_name == "oracle-contract" and args.address:
+    elif args.subparser == "oracle-contract" and args.feed:
+        try:
+            swapInstance = SwapContract(
+                context, oracle_nft, oracle_address, swap_address, swap
+            )
+            exchange = await swapInstance.get_oracle_exchange_rate()
+
+            print("Charli3 - Oracle Feed")
+            print(f"Last Price: {exchange / 1000000:.6f} tADA/tUSDt")
+
+        except Exception as e:
+            return f"An error occurred while fetching the oracle feed: {e}"
+
+    elif args.subparser == "oracle-contract" and args.address:
         print(f"Oracle contract's address: {oracle_address}")
 
 
@@ -371,7 +382,7 @@ def main():
     parser = create_parser()
     args = parser.parse_args(None if sys.argv[1:] else ["-h"])
     ctx = context(args)
-    display(args, ctx)
+    asyncio.run(display(args, ctx))
 
 
 if __name__ == "__main__":

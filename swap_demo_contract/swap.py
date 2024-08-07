@@ -1,7 +1,11 @@
-import pycardano as pyc
+"""Swap Contract"""
 
+from datetime import datetime
+
+import pycardano as pyc
 from charli3_offchain_core.chain_query import ChainQuery
-from .lib.datums import GenericData, Nothing
+
+from .lib.datums import GenericData
 from .lib.redeemers import AddLiquidity, SwapA, SwapB
 
 
@@ -104,7 +108,7 @@ class SwapContract:
                 * {updated_amountA_for_swap_utxo} tUSDT."""
             )
 
-    def swap_A(
+    async def swap_A(
         self,
         amountA: int,
         user_address: pyc.Address,
@@ -113,7 +117,7 @@ class SwapContract:
         sk: pyc.PaymentSigningKey,
     ):
         """Exchange of asset A  with B"""
-        oracle_feed_utxo = self.get_oracle_utxo()
+        oracle_feed_utxo = await self.get_oracle_utxo()
         swap_utxo = self.get_swap_utxo()
         amountB = self.swap_a_with_b(amountA)
         amountB_precision = amountB * self.coin_precision
@@ -181,7 +185,7 @@ class SwapContract:
                 * {updated_masset_amount_for_swap_utxo} tUSDT."""
             )
 
-    def swap_B(
+    async def swap_B(
         self,
         amountB: int,
         user_address: pyc.Address,
@@ -190,7 +194,7 @@ class SwapContract:
         sk: pyc.PaymentSigningKey,
     ):
         """Exchange of asset B  with A"""
-        oracle_feed_utxo = self.get_oracle_utxo()
+        oracle_feed_utxo = await self.get_oracle_utxo()
         swap_utxo = self.get_swap_utxo()
         amountA = self.swap_b_with_a(amountB)
         available_user_tADA = self.available_user_tlovelace(user_address) // 1000000
@@ -288,33 +292,45 @@ class SwapContract:
         print(f"Oracle exchange rate: {precision} tADA/tUSDT")
         return (amount_a * exchange_rate_price) // self.coin_precision
 
-    def get_oracle_exchange_rate(self) -> int:
-        """Get the oracle's feed exchange rate"""
-        oracle_feed_utxo = self.get_oracle_utxo()
-        oracle_inline_datum: GenericData = GenericData.from_cbor(
-            oracle_feed_utxo.output.datum.cbor
-        )
-        return oracle_inline_datum.price_data.get_price()
+    def format_timestamp(self, timestamp):
+        """Convert epoch to humnan"""
+        return datetime.utcfromtimestamp(timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
 
-    def get_oracle_timestamp(self) -> int:
+    async def get_oracle_exchange_rate(self) -> int:
         """Get the oracle's feed exchange rate"""
-        oracle_feed_utxo = self.get_oracle_utxo()
+        price = 0
+        oracle_feed_utxo = await self.get_oracle_utxo()
+
+        if oracle_feed_utxo.output.datum and not isinstance(
+            oracle_feed_utxo.output.datum, GenericData
+        ):
+            if oracle_feed_utxo.output.datum.cbor:
+                oracle_inline_datum = GenericData.from_cbor(
+                    oracle_feed_utxo.output.datum.cbor
+                )
+                price = oracle_inline_datum.price_data.get_price()
+
+        return price
+
+    async def get_oracle_timestamp(self) -> int:
+        """Get the oracle's feed exchange rate"""
+        oracle_feed_utxo = await self.get_oracle_utxo()
         oracle_inline_datum: GenericData = GenericData.from_cbor(
             oracle_feed_utxo.output.datum.cbor
         )
         return oracle_inline_datum.price_data.get_timestamp()
 
-    def get_oracle_expiration(self) -> int:
+    async def get_oracle_expiration(self) -> int:
         """Get the oracle's feed exchange rate"""
-        oracle_feed_utxo = self.get_oracle_utxo()
+        oracle_feed_utxo = await self.get_oracle_utxo()
         oracle_inline_datum: GenericData = GenericData.from_cbor(
             oracle_feed_utxo.output.datum.cbor
         )
         return oracle_inline_datum.price_data.get_expiry()
 
-    def get_oracle_utxo(self) -> pyc.UTxO:
+    async def get_oracle_utxo(self) -> pyc.UTxO:
         """Retrieve the oracle's feed UTXO using the NFT identifier."""
-        oracle_utxos = self.chain_query.get_utxos(str(self.oracle_addr))
+        oracle_utxos = await self.chain_query.get_utxos(str(self.oracle_addr))
         oracle_utxo_nft = next(
             utxo
             for utxo in oracle_utxos
