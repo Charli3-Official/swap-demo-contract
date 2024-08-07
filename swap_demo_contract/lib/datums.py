@@ -110,3 +110,8 @@ class AggDatum(PlutusData):
 
     CONSTR_ID = 2
     aggstate: AggState
+
+
+@dataclass
+class Nothing(PlutusData):
+    CONSTR_ID = 1

@@ -1,4 +1,5 @@
 """offchain code containing mint class"""
+
 from dataclasses import dataclass
 from pycardano import (
     Address,
@@ -19,7 +20,8 @@ from pycardano import (
     ExecutionUnits,
     utils,
 )
-from lib.chain_query import ChainQuery
+
+from charli3_offchain_core.chain_query import ChainQuery
 
 
 @dataclass

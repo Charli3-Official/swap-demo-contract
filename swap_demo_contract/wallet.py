@@ -8,7 +8,8 @@ from pycardano import (
     PaymentSigningKey,
 )
 
-MNEMONIC_24 = os.environ.get("24_WALLET_PASSPHRASE")
+MNEMONIC_24 = "issue patient merge audit idea swamp session afford nose spider boss wreck stairs evoke invest usage casino street muscle fury myth island host rude"
+
 
 def user_address() -> Address:
     hdwallet = HDWallet.from_mnemonic(MNEMONIC_24)
@@ -29,12 +30,6 @@ def user_address() -> Address:
 def user_esk() -> PaymentSigningKey:
     hdwallet = HDWallet.from_mnemonic(MNEMONIC_24)
     hdwallet_spend = hdwallet.derive_from_path("m/1852'/1815'/0'/0/0")
-    spend_public_key = hdwallet_spend.public_key
-    spend_vk = PaymentVerificationKey.from_primitive(spend_public_key)
-
-    hdwallet_stake = hdwallet.derive_from_path("m/1852'/1815'/0'/2/0")
-    stake_public_key = hdwallet_stake.public_key
-    stake_vk = PaymentVerificationKey.from_primitive(stake_public_key)
 
     extended_signing_key = ExtendedSigningKey.from_hdwallet(hdwallet_spend)
     return extended_signing_key

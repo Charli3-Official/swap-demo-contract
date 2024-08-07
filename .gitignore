@@ -168,3 +168,6 @@ debug.py
 **/.vkey
 **/credentials/
 .python-version
+
+# config files
+config.yml

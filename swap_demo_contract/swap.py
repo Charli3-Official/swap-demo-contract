@@ -1,8 +1,8 @@
 import pycardano as pyc
-from lib.chain_query import ChainQuery
 
-from lib.datums import GenericData, Nothing
-from lib.redeemers import AddLiquidity, SwapA, SwapB
+from charli3_offchain_core.chain_query import ChainQuery
+from .lib.datums import GenericData, Nothing
+from .lib.redeemers import AddLiquidity, SwapA, SwapB
 
 
 class Swap:
@@ -35,13 +35,13 @@ class SwapContract:
 
     def __init__(
         self,
-        context: ChainQuery,
+        chain_query: ChainQuery,
         oracle_nft: pyc.MultiAsset,
         oracle_addr: pyc.Address,
         swap_addr: pyc.Address,
         swap: Swap,
     ) -> None:
-        self.context = context
+        self.chain_query = chain_query
         self.oracle_addr = oracle_addr
         self.swap_addr = swap_addr
         self.coin_precision = 1000000
@@ -61,7 +61,7 @@ class SwapContract:
         swap_utxo = self.get_swap_utxo()
         available_user_tADA = self.available_user_tlovelace(user_address) // 1000000
         available_user_tUSDT = self.available_user_tusdt(user_address)
-        if  available_user_tADA < amountB or available_user_tUSDT < amountA:
+        if available_user_tADA < amountB or available_user_tUSDT < amountA:
             print(
                 f"""Error! The user's wallet  doesn't have enough liquidity!
             Available: {available_user_tUSDT} tUSDT, {available_user_tADA} tADA"""
@@ -70,7 +70,9 @@ class SwapContract:
             updated_massetA_for_swap_utxo = self.add_asset_swap(amountA)
             updated_amountA_for_swap_utxo = self.add_asset_swap_amount(amountA)
 
-            updated_amountB_for_swap_utxo = swap_utxo.output.amount.coin + amountB * 1000000
+            updated_amountB_for_swap_utxo = (
+                swap_utxo.output.amount.coin + amountB * 1000000
+            )
 
             swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, AddLiquidity())
 
@@ -83,7 +85,7 @@ class SwapContract:
                 address=swap_address, amount=swap_value, datum=pyc.PlutusData()
             )
 
-            builder = pyc.TransactionBuilder(self.context)
+            builder = pyc.TransactionBuilder(self.chain_query)
             (
                 builder.add_script_input(
                     utxo=swap_utxo,
@@ -160,7 +162,7 @@ class SwapContract:
                 address=swap_address, amount=amount_swap, datum=pyc.PlutusData()
             )
 
-            builder = pyc.TransactionBuilder(self.context)
+            builder = pyc.TransactionBuilder(self.chain_query)
             (
                 builder.add_script_input(
                     utxo=swap_utxo, script=script, redeemer=swap_redeemer
@@ -221,7 +223,7 @@ class SwapContract:
                 address=user_address, amount=min_lovelace_amount_for_the_user
             )
             min_lovelace = pyc.utils.min_lovelace_post_alonzo(
-                min_lovelace_output_utxo_user, self.context
+                min_lovelace_output_utxo_user, self.chain_query
             )
 
             # Add the minimum lovelace amount to the user value
@@ -251,7 +253,7 @@ class SwapContract:
                 address=swap_address, amount=amount_swap, datum=pyc.PlutusData()
             )
 
-            builder = pyc.TransactionBuilder(self.context)
+            builder = pyc.TransactionBuilder(self.chain_query)
             (
                 builder.add_script_input(
                     utxo=swap_utxo,
@@ -312,7 +314,7 @@ class SwapContract:
 
     def get_oracle_utxo(self) -> pyc.UTxO:
         """Retrieve the oracle's feed UTXO using the NFT identifier."""
-        oracle_utxos = self.context.utxos(str(self.oracle_addr))
+        oracle_utxos = self.chain_query.get_utxos(str(self.oracle_addr))
         oracle_utxo_nft = next(
             utxo
             for utxo in oracle_utxos
@@ -322,7 +324,7 @@ class SwapContract:
 
     def get_swap_utxo(self) -> pyc.UTxO:
         """Retrieve the UTxO for the swap using the NFT identifier"""
-        swap_utxos = self.context.utxos(str(self.swap_addr))
+        swap_utxos = self.chain_query.get_utxos(str(self.swap_addr))
         swap_utxo_nft = next(
             x for x in swap_utxos if x.output.amount.multi_asset >= self.swap.swap_nft
         )
@@ -425,7 +427,7 @@ class SwapContract:
     def available_user_pure_tlovelace(self, user_address: pyc.Address) -> int:
         """Get the available user's pure lovelace amount"""
         amount = 0
-        for utxo in self.context.utxos(str(user_address)):
+        for utxo in self.chain_query.utxos(str(user_address)):
             if not utxo.output.amount.multi_asset:
                 amount += utxo.output.amount.coin
         return amount
@@ -433,7 +435,7 @@ class SwapContract:
     def available_user_tlovelace(self, user_address: pyc.Address) -> int:
         """Get the available user's  lovelace amount"""
         amount = 0
-        for utxo in self.context.utxos(str(user_address)):
+        for utxo in self.chain_query.utxos(str(user_address)):
             amount += utxo.output.amount.coin
         return amount
 
@@ -442,7 +444,7 @@ class SwapContract:
         ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
         ((asset, _),) = assets.to_shallow_primitive().items()
 
-        for utxo in self.context.utxos(str(user_address)):
+        for utxo in self.chain_query.utxos(str(user_address)):
             m_assets = utxo.output.amount.multi_asset.to_shallow_primitive()
             for user_policy_id, assets in m_assets.items():
                 if user_policy_id == policy_id:
@@ -458,13 +460,13 @@ class SwapContract:
         address: pyc.Address,
     ):
         """Adds collateral and signer to tx, sign and submit tx."""
-        non_nft_utxo = self.context.find_collateral(address)
+        non_nft_utxo = self.chain_query.find_collateral(address)
 
         if non_nft_utxo is None:
-            self.context.create_collateral(address, sk)
-            non_nft_utxo = self.context.find_collateral(address)
+            self.chain_query.create_collateral(address, sk)
+            non_nft_utxo = self.chain_query.find_collateral(address)
 
         builder.collaterals.append(non_nft_utxo)
         # print(builder)
         signed_tx = builder.build_and_sign([sk], change_address=address)
-        self.context.submit_tx_without_print(signed_tx)
+        self.chain_query.submit_tx_without_print(signed_tx)
