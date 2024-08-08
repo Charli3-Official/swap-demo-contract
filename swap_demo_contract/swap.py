@@ -91,7 +91,7 @@ class SwapContract:
                 address=swap_address, amount=swap_value, datum=pyc.PlutusData()
             )
 
-            builder = pyc.TransactionBuilder(self.chain_query)
+            builder = pyc.TransactionBuilder(self.chain_query.context)
             (
                 builder.add_script_input(
                     utxo=swap_utxo,
@@ -102,13 +102,11 @@ class SwapContract:
                 .add_output(updated_swap_utxo)
             )
 
-            self.submit_tx_builder(builder, sk, user_address)
+            await self.chain_query.submit_tx_builder(builder, sk, user_address)
 
-            print(
-                f"""Updated swap contract liquidity:
-                * {updated_amountB_for_swap_utxo} tlovelaces.
-                * {updated_amountA_for_swap_utxo} tUSDT."""
-            )
+            print("Updated swap contract liquidity:")
+            print(f"- {updated_amountB_for_swap_utxo} tlovelaces.")
+            print(f"- {updated_amountA_for_swap_utxo} tUSDT.")
 
     async def swap_A(
         self,
@@ -166,7 +164,7 @@ class SwapContract:
                 address=swap_address, amount=amount_swap, datum=pyc.PlutusData()
             )
 
-            builder = pyc.TransactionBuilder(self.chain_query)
+            builder = pyc.TransactionBuilder(self.chain_query.context)
             (
                 builder.add_script_input(
                     utxo=swap_utxo, script=script, redeemer=swap_redeemer
@@ -178,12 +176,11 @@ class SwapContract:
             )
 
             print(f"Exchanging {amountA} lovelace for {amountB} tADA.")
-            self.submit_tx_builder(builder, sk, user_address)
-            print(
-                f"""Updated swap contract liquidity:
-                * {updated_amountB_for_swap_utxo} tlovelaces.
-                * {updated_masset_amount_for_swap_utxo} tUSDT."""
-            )
+            await self.chain_query.submit_tx_builder(builder, sk, user_address)
+
+            print("Updated swap contract liquidity:")
+            print(f"- {updated_amountB_for_swap_utxo} tlovelaces.")
+            print(f"- {updated_masset_amount_for_swap_utxo} tUSDT.")
 
     async def swap_B(
         self,
@@ -217,20 +214,9 @@ class SwapContract:
             Available: {available_swap_tusdt} tUSDT."""
             )
         else:
-            swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapB(amountB))
+            swap_redeemer = pyc.Redeemer(SwapB(amountB))
 
             multi_asset_for_the_user = await self.take_multi_asset_user(amountA)
-
-            # Calculate minimum lovelace a transaction output needs to hold post alonzo
-            # min_lovelace_amount_for_the_user = pyc.transaction.Value(
-            #     multi_asset=multi_asset_for_the_user
-            # )
-            # min_lovelace_output_utxo_user = pyc.TransactionOutput(
-            #     address=user_address, amount=min_lovelace_amount_for_the_user
-            # )
-            # min_lovelace = pyc.utils.min_lovelace_post_alonzo(
-            #     min_lovelace_output_utxo_user, self.chain_query
-            # )
 
             # Add the minimum lovelace amount to the user value
             amount_for_the_user = pyc.transaction.Value(
@@ -259,7 +245,7 @@ class SwapContract:
                 address=swap_address, amount=amount_swap, datum=pyc.PlutusData()
             )
 
-            builder = pyc.TransactionBuilder(self.chain_query)
+            builder = pyc.TransactionBuilder(self.chain_query.context)
             (
                 builder.add_script_input(
                     utxo=swap_utxo,
@@ -273,12 +259,13 @@ class SwapContract:
             )
 
             print(f"Exchanging {amountB} tADA for {amountA} tUSDT.")
-            self.submit_tx_builder(builder, sk, user_address)
+            await self.chain_query.submit_tx_builder(builder, sk, user_address)
+            # await self.submit_tx_builder(builder, sk, user_address)
+            print("Updated swap contract liquidity:")
             print(
-                f"""Updated swap contract liquidity:
-                * {updated_amountB_for_swap_utxo // 1000000 } tADA ({updated_amountB_for_swap_utxo} tlovelaces).
-                * {updated_masset_amount_for_swap_utxo} tUSDT."""
+                f"- {updated_amountB_for_swap_utxo // 1000000 } tADA ({updated_amountB_for_swap_utxo} tlovelaces)."
             )
+            print(f"- {updated_masset_amount_for_swap_utxo} tUSDT.")
 
     async def swap_b_with_a(self, amount_b: int) -> int:
         """Operation for swaping coin B with A"""
@@ -479,20 +466,19 @@ class SwapContract:
                             amount_asset += amount
         return amount_asset
 
-    def submit_tx_builder(
-        self,
-        builder: pyc.TransactionBuilder,
-        sk: pyc.PaymentSigningKey,
-        address: pyc.Address,
-    ):
-        """Adds collateral and signer to tx, sign and submit tx."""
-        non_nft_utxo = self.chain_query.find_collateral(address)
+    # async def submit_tx_builder(
+    #     self,
+    #     builder: pyc.TransactionBuilder,
+    #     sk: pyc.PaymentSigningKey,
+    #     address: pyc.Address,
+    # ):
+    #     """Adds collateral and signer to tx, sign and submit tx."""
+    #     non_nft_utxo = await self.chain_query.find_collateral(address, 9000000)
 
-        if non_nft_utxo is None:
-            self.chain_query.create_collateral(address, sk)
-            non_nft_utxo = self.chain_query.find_collateral(address)
+    #     if non_nft_utxo is None:
+    #         non_nft_utxo = await self.chain_query.get_or_create_collateral(address, sk)
 
-        builder.collaterals.append(non_nft_utxo)
-        # print(builder)
-        signed_tx = builder.build_and_sign([sk], change_address=address)
-        self.chain_query.submit_tx_without_print(signed_tx)
+    #     builder.collaterals.append(non_nft_utxo)
+    #     # print(builder)
+    #     signed_tx = builder.build_and_sign([sk], change_address=address)
+    #     self.chain_query.submit_tx_without_print(signed_tx)
