@@ -80,7 +80,7 @@ class SwapContract:
                 swap_utxo.output.amount.coin + amountB * 1000000
             )
 
-            swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, AddLiquidity())
+            swap_redeemer = pyc.Redeemer(AddLiquidity())
 
             swap_value = pyc.transaction.Value(
                 coin=updated_amountB_for_swap_utxo,
@@ -88,7 +88,7 @@ class SwapContract:
             )
 
             updated_swap_utxo = pyc.TransactionOutput(
-                address=swap_address, amount=swap_value, datum=pyc.PlutusData()
+                address=swap_address, amount=swap_value, datum=pyc.Unit()
             )
 
             builder = pyc.TransactionBuilder(self.chain_query.context)
@@ -161,7 +161,7 @@ class SwapContract:
             )
 
             new_output_swap = pyc.TransactionOutput(
-                address=swap_address, amount=amount_swap, datum=pyc.PlutusData()
+                address=swap_address, amount=amount_swap, datum=pyc.Unit()
             )
 
             builder = pyc.TransactionBuilder(self.chain_query.context)
@@ -242,7 +242,7 @@ class SwapContract:
             )
 
             new_output_swap = pyc.TransactionOutput(
-                address=swap_address, amount=amount_swap, datum=pyc.PlutusData()
+                address=swap_address, amount=amount_swap, datum=pyc.Unit()
             )
 
             builder = pyc.TransactionBuilder(self.chain_query.context)
