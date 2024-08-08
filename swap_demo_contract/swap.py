@@ -129,19 +129,15 @@ class SwapContract:
 
         if amountB < 1:
             print(
-                "The minimum sale quantity of tADA is 1. Current value {amountB} tADA."
+                f"The minimum sale quantity of tADA is 1. Current value {amountB} tADA."
             )
 
         elif amountB > swap_amountB_tADA:
-            print(
-                f"""Error! The swap contract doesn't have enough liquidity!
-            Available: {swap_amountB_tADA} tADA."""
-            )
+            print(f"Error! The user's wallet doesn't have enough liquidity!")
+            print(f"Available: {swap_amountB_tADA} tUSDT.")
         elif amountA > user_amountB_tUSDT:
-            print(
-                f"""Error! The user's wallet doesn't have enough liquidity!
-            Available: {user_amountB_tUSDT} tUSDT."""
-            )
+            print(f"Error! The user's wallet doesn't have enough liquidity!")
+            print(f"Available: {user_amountB_tUSDT} tUSDT.")
         else:
             swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapA(amountA))
 
@@ -287,15 +283,17 @@ class SwapContract:
     async def swap_b_with_a(self, amount_b: int) -> int:
         """Operation for swaping coin B with A"""
         exchange_rate_price = await self.get_oracle_exchange_rate()
-        precision = exchange_rate_price / self.coin_precision
-        print(f"Oracle exchange rate: {precision} tADA/tUSDT")
+        print(
+            f"Oracle exchange rate: {exchange_rate_price / self.coin_precision} tUSDT/tADA (A/B)"
+        )
         return (amount_b * self.coin_precision) // exchange_rate_price
 
     async def swap_a_with_b(self, amount_a: int) -> int:
         """Operation for swaping coin A with B"""
         exchange_rate_price = await self.get_oracle_exchange_rate()
-        precision = exchange_rate_price / self.coin_precision
-        print(f"Oracle exchange rate: {precision} tADA/tUSDT")
+        print(
+            f"Oracle exchange rate: {exchange_rate_price / self.coin_precision} tUSDT/tADA (A/B)"
+        )
         return (amount_a * exchange_rate_price) // self.coin_precision
 
     def format_timestamp(self, timestamp):

@@ -9,7 +9,10 @@ from pycardano import (
     PaymentVerificationKey,
 )
 
-MNEMONIC_24 = "issue patient merge audit idea swamp session afford nose spider boss wreck stairs evoke invest usage casino street muscle fury myth island host rude"
+# MNEMONIC_24 = "net subject gown ask suspect mango hammer picnic bridge interest world neglect salon cycle crater fat grocery sausage harvest poverty hurt zone arrow slow"
+
+# USER
+MNEMONIC_24 = "atom during negative faculty enable brand limb jaguar stumble again exchange bleak over chimney tide slice parent possible answer relax rebuild civil puzzle catalog"
 
 
 def user_address() -> Address:

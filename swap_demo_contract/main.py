@@ -102,16 +102,6 @@ with open(mint_script_path, "r") as f:
     script_hex = f.read()
     plutus_script_v2 = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
 
-# User payment key generation
-# node_signing_key = PaymentSigningKey.generate()
-# node_signing_key.save("node.skey")
-# node_verification_key = PaymentVerificationKey.from_signing_key(node_signing_key)
-# node_verification_key.save("node.vkey")
-
-# Load user payment key
-# extended_payment_skey = PaymentSigningKey.load("./credentials/node.skey")
-# extended_payment_vkey = PaymentVerificationKey.load("./credentials/node.vkey")
-
 # Load user payment key grom wallet file
 extended_payment_skey = w.user_esk()
 
