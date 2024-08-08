@@ -44,7 +44,7 @@ class Mint:
         self.swap_address = swap_address
         self.minting_script_plutus_v2 = plutus_v2_mint_script
 
-    def mint_nft_with_script(self):
+    async def mint_nft_with_script(self):
         """mint tokens with plutus v2 script"""
         policy_id = plutus_script_hash(self.minting_script_plutus_v2)
         asset_name = "SWAP3-PYCARDANO"
@@ -82,9 +82,7 @@ class Mint:
         # Add minting script with an empty datum and a minting redeemer
         builder.add_minting_script(
             self.minting_script_plutus_v2,
-            redeemer=Redeemer(
-                RedeemerTag.MINT, MintToken(), ExecutionUnits(1000000, 300979640)
-            ),
+            redeemer=Redeemer(RedeemerTag.MINT, MintToken()),
         )
 
         # Set nft we want to mint
@@ -93,19 +91,19 @@ class Mint:
         # Set transaction metadata
         builder.auxiliary_data = auxiliary_data
 
-        min_lovelace_amount = Value(multi_asset=nft_swap)
+        # min_lovelace_amount = Value(multi_asset=nft_swap)
 
-        min_lovelace_output_utxo = TransactionOutput(
-            address=self.swap_address,
-            amount=min_lovelace_amount,
-            datum=PlutusData(),
-        )
-        min_lovelace = utils.min_lovelace_post_alonzo(
-            min_lovelace_output_utxo, self.context
-        )
+        # min_lovelace_output_utxo = TransactionOutput(
+        #     address=self.swap_address,
+        #     amount=min_lovelace_amount,
+        #     datum=PlutusData(),
+        # )
+        # min_lovelace = utils.min_lovelace_post_alonzo(
+        #     min_lovelace_output_utxo, self.context
+        # )
 
         # Add the minimum lovelace amount to the user value
-        value_swap_utxo = Value(coin=min_lovelace, multi_asset=nft_swap)
+        value_swap_utxo = Value(coin=2000000, multi_asset=nft_swap)
         # Send the NFT to our own address
         swap_nft_output = TransactionOutput(
             address=self.swap_address, amount=value_swap_utxo, datum=PlutusData()
@@ -113,18 +111,20 @@ class Mint:
 
         builder.add_output(swap_nft_output)
 
-        self.submit_tx_builder(builder)
-
-    def submit_tx_builder(self, builder: TransactionBuilder):
-        """Adds collateral and signer to tx, sign and submit tx."""
-        non_nft_utxo = self.context.find_collateral(self.user_address)
-
-        if non_nft_utxo is None:
-            self.context.create_collateral(self.user_address, self.signing_key)
-            non_nft_utxo = self.context.find_collateral(self.user_address)
-
-        builder.collaterals.append(non_nft_utxo)
-        signed_tx = builder.build_and_sign(
-            [self.signing_key], change_address=self.user_address
+        await self.context.submit_tx_builder(
+            builder, self.signing_key, self.user_address
         )
-        self.context.submit_tx_without_print(signed_tx)
+
+    # def submit_tx_builder(self, builder: TransactionBuilder):
+    #     """Adds collateral and signer to tx, sign and submit tx."""
+    #     non_nft_utxo = await self.context.find_collateral(self.user_address, 5000000)
+
+    #     if non_nft_utxo is None:
+    #         self.context.create_collateral(self.user_address, self.signing_key)
+    #         non_nft_utxo = self.context.find_collateral(self.user_address)
+
+    #     builder.collaterals.append(non_nft_utxo)
+    #     signed_tx = builder.build_and_sign(
+    #         [self.signing_key], change_address=self.user_address
+    #     )
+    #     self.context.submit_tx_without_print(signed_tx)

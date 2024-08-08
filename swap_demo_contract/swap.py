@@ -223,22 +223,22 @@ class SwapContract:
         else:
             swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapB(amountB))
 
-            multi_asset_for_the_user = self.take_multi_asset_user(amountA)
+            multi_asset_for_the_user = await self.take_multi_asset_user(amountA)
 
             # Calculate minimum lovelace a transaction output needs to hold post alonzo
-            min_lovelace_amount_for_the_user = pyc.transaction.Value(
-                multi_asset=multi_asset_for_the_user
-            )
-            min_lovelace_output_utxo_user = pyc.TransactionOutput(
-                address=user_address, amount=min_lovelace_amount_for_the_user
-            )
-            min_lovelace = pyc.utils.min_lovelace_post_alonzo(
-                min_lovelace_output_utxo_user, self.chain_query
-            )
+            # min_lovelace_amount_for_the_user = pyc.transaction.Value(
+            #     multi_asset=multi_asset_for_the_user
+            # )
+            # min_lovelace_output_utxo_user = pyc.TransactionOutput(
+            #     address=user_address, amount=min_lovelace_amount_for_the_user
+            # )
+            # min_lovelace = pyc.utils.min_lovelace_post_alonzo(
+            #     min_lovelace_output_utxo_user, self.chain_query
+            # )
 
             # Add the minimum lovelace amount to the user value
             amount_for_the_user = pyc.transaction.Value(
-                coin=min_lovelace, multi_asset=multi_asset_for_the_user
+                coin=2000000, multi_asset=multi_asset_for_the_user
             )
 
             # Add the value to the user UTXO
@@ -250,7 +250,7 @@ class SwapContract:
             updated_amountB_for_swap_utxo = amountB_at_swap_utxo + (amountB * 1000000)
 
             updated_masset_for_swap_utxo = await self.decrease_asset_swap(amountA)
-            updated_masset_amount_for_swap_utxo = self.decrease_asset_swap_amount(
+            updated_masset_amount_for_swap_utxo = await self.decrease_asset_swap_amount(
                 amountA
             )
 
@@ -347,10 +347,15 @@ class SwapContract:
     async def get_swap_utxo(self) -> pyc.UTxO:
         """Retrieve the UTxO for the swap using the NFT identifier"""
         swap_utxos = await self.chain_query.get_utxos(str(self.swap_addr))
-        swap_utxo_nft = next(
-            x for x in swap_utxos if x.output.amount.multi_asset >= self.swap.swap_nft
-        )
-        return swap_utxo_nft
+        try:
+            swap_utxo_nft = next(
+                x
+                for x in swap_utxos
+                if x.output.amount.multi_asset >= self.swap.swap_nft
+            )
+            return swap_utxo_nft
+        except StopIteration:
+            raise ValueError("No matching UTxO found for the given NFT identifier")
 
     async def decrease_asset_swap(self, selling_amount: int) -> pyc.MultiAsset:
         """The updated swap asset to be decreased at the address"""

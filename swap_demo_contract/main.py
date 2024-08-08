@@ -95,16 +95,7 @@ def context(args) -> ChainQuery:
     )
 
 
-oracle_address, swap_address = load_contracts_addresses()
-
-swap_script_hash = swap_address.payment_part
-# swap_script = context._get_script(str(swap_script_hash))
-
-# if plutus_script_hash(swap_script) != swap_script_hash:
-#     swap_script = PlutusV2Script(cbor2.dumps(swap_script))
-
 # Reading minting script
-#
 current_dir = os.path.dirname(os.path.abspath(__file__))
 mint_script_path = os.path.join(current_dir, "utils", "scripts", "mint_script.plutus")
 with open(mint_script_path, "r") as f:
@@ -289,6 +280,10 @@ def create_parser():
 
 # Parser command-line arguments
 async def display(args, context):
+    oracle_address, swap_address = load_contracts_addresses()
+    swap_script_hash = swap_address.payment_part
+    swap_script = await context.get_plutus_script(swap_script_hash)
+
     if args.subparser == "trade" and args.subparser_trade_subparser == "tADA":
         swapInstance = SwapContract(
             context, oracle_nft, oracle_address, swap_address, swap
@@ -356,7 +351,7 @@ async def display(args, context):
         swap_utxo_nft = Mint(
             context, extended_payment_skey, user_address, swap_address, plutus_script_v2
         )
-        swap_utxo_nft.mint_nft_with_script()
+        await swap_utxo_nft.mint_nft_with_script()
 
     elif args.subparser == "oracle-contract" and args.feed:
         try:
