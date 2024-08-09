@@ -106,7 +106,9 @@ class SwapContract:
             await self.chain_query.submit_tx_builder(builder, sk, user_address)
 
             print("Updated swap contract liquidity:")
-            print(f"- {updated_amountB_for_swap_utxo} tlovelaces.")
+            print(
+                f"- {updated_amountB_for_swap_utxo // 1000000} tADA ({updated_amountB_for_swap_utxo} tlovelaces)"
+            )
             print(f"- {updated_swap_total_amount} tUSDT.")
 
     async def swap_A(
@@ -410,6 +412,22 @@ class SwapContract:
             coin_a_asset_name
         ]
         return swap_utxo.output.amount.multi_asset, total_amount
+
+    async def add_asset_swap_amount(self, buying_amount: int) -> int:
+        """The updated swap asset amount to be added at the address"""
+        ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
+        ((asset, _),) = assets.to_shallow_primitive().items()
+
+        swap_utxo = await self.get_swap_utxo()
+        m_assets = swap_utxo.output.amount.multi_asset.to_shallow_primitive()
+
+        amountA = 0
+        for swap_policy_id, assets in m_assets.items():
+            if swap_policy_id == policy_id:
+                for asset_name, amount in assets.items():
+                    if asset_name == asset:
+                        amountA = amount + buying_amount
+        return amountA
 
     async def take_multi_asset_user(self, buying_amount: int) -> pyc.MultiAsset:
         """The updated user asset to be added to it's wallet"""
