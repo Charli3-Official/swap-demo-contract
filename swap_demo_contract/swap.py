@@ -73,8 +73,9 @@ class SwapContract:
             Available: {available_user_tUSDT} tUSDT, {available_user_tADA} tADA"""
             )
         else:
-            updated_massetA_for_swap_utxo = await self.add_asset_swap(amountA)
-            updated_amountA_for_swap_utxo = await self.add_asset_swap_amount(amountA)
+            updated_swap_multi_asset, updated_swap_total_amount = (
+                await self.add_asset_swap(amountA)
+            )
 
             updated_amountB_for_swap_utxo = (
                 swap_utxo.output.amount.coin + amountB * 1000000
@@ -84,7 +85,7 @@ class SwapContract:
 
             swap_value = pyc.transaction.Value(
                 coin=updated_amountB_for_swap_utxo,
-                multi_asset=updated_massetA_for_swap_utxo,
+                multi_asset=updated_swap_multi_asset,
             )
 
             updated_swap_utxo = pyc.TransactionOutput(
@@ -106,7 +107,7 @@ class SwapContract:
 
             print("Updated swap contract liquidity:")
             print(f"- {updated_amountB_for_swap_utxo} tlovelaces.")
-            print(f"- {updated_amountA_for_swap_utxo} tUSDT.")
+            print(f"- {updated_swap_total_amount} tUSDT.")
 
     async def swap_A(
         self,
@@ -149,16 +150,12 @@ class SwapContract:
             # TODO change units to ada instead of lovelace
             updated_amountB_for_swap_utxo = swap_utxo.output.amount.coin - amountB
 
-            updated_masset_for_swap_utxo = await self.add_asset_swap(amountA)
-            print(updated_masset_for_swap_utxo)
-
-            updated_masset_amount_for_swap_utxo = await self.add_asset_swap_amount(
-                amountA
+            updated_swap_multi_asset, updated_swap_total_amount = (
+                await self.add_asset_swap(amountA)
             )
-
             amount_swap = pyc.transaction.Value(
                 coin=updated_amountB_for_swap_utxo,
-                multi_asset=updated_masset_for_swap_utxo,
+                multi_asset=updated_swap_multi_asset,
             )
 
             new_output_swap = pyc.TransactionOutput(
@@ -181,7 +178,7 @@ class SwapContract:
 
             print("Updated swap contract liquidity:")
             print(f"- {updated_amountB_for_swap_utxo} tlovelaces.")
-            print(f"- {updated_masset_amount_for_swap_utxo} tUSDT.")
+            print(f"- {updated_swap_total_amount} tUSDT.")
 
     async def swap_B(
         self,
@@ -381,7 +378,7 @@ class SwapContract:
                         amountA = amount - selling_amount
         return amountA
 
-    async def add_asset_swap(self, buying_amount: int) -> pyc.MultiAsset:
+    async def add_asset_swap(self, buying_amount: int):
         """The updated swap asset to be added at the address"""
         ((coin_a_policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
         ((coin_a_asset_name, _),) = assets.to_shallow_primitive().items()
@@ -405,23 +402,14 @@ class SwapContract:
                     coin_a_asset_name
                 ] = buying_amount
 
-        return swap_utxo.output.amount.multi_asset
+        else:
+            new_asset = pyc.Asset({coin_a_asset_name: buying_amount})
+            swap_utxo.output.amount.multi_asset[coin_a_policy_id] = new_asset
 
-    async def add_asset_swap_amount(self, buying_amount: int) -> int:
-        """The updated swap asset amount to be added at the address"""
-        ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
-        ((asset, _),) = assets.to_shallow_primitive().items()
-
-        swap_utxo = await self.get_swap_utxo()
-        m_assets = swap_utxo.output.amount.multi_asset.to_shallow_primitive()
-
-        amountA = 0
-        for swap_policy_id, assets in m_assets.items():
-            if swap_policy_id == policy_id:
-                for asset_name, amount in assets.items():
-                    if asset_name == asset:
-                        amountA = amount + buying_amount
-        return amountA
+        total_amount = swap_utxo.output.amount.multi_asset[coin_a_policy_id][
+            coin_a_asset_name
+        ]
+        return swap_utxo.output.amount.multi_asset, total_amount
 
     async def take_multi_asset_user(self, buying_amount: int) -> pyc.MultiAsset:
         """The updated user asset to be added to it's wallet"""
