@@ -137,7 +137,7 @@ class SwapContract:
             print(f"Error! The user's wallet doesn't have enough liquidity!")
             print(f"Available: {user_amountB_tUSDT} tUSDT.")
         else:
-            swap_redeemer = pyc.Redeemer(pyc.RedeemerTag.SPEND, SwapA(amountA))
+            swap_redeemer = pyc.Redeemer(SwapA(amountA))
 
             amount_for_the_user = pyc.transaction.Value(coin=amountB_precision)
 
@@ -146,11 +146,12 @@ class SwapContract:
             )
 
             # swap utxo
-            # updated_amountB_for_swap_utxo = swap_amountB_tADA - amountB
             # TODO change units to ada instead of lovelace
             updated_amountB_for_swap_utxo = swap_utxo.output.amount.coin - amountB
 
             updated_masset_for_swap_utxo = await self.add_asset_swap(amountA)
+            print(updated_masset_for_swap_utxo)
+
             updated_masset_amount_for_swap_utxo = await self.add_asset_swap_amount(
                 amountA
             )
@@ -382,25 +383,29 @@ class SwapContract:
 
     async def add_asset_swap(self, buying_amount: int) -> pyc.MultiAsset:
         """The updated swap asset to be added at the address"""
-        ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
-        ((asset, _),) = assets.to_shallow_primitive().items()
+        ((coin_a_policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
+        ((coin_a_asset_name, _),) = assets.to_shallow_primitive().items()
 
         swap_utxo = await self.get_swap_utxo()
-        m_assets = swap_utxo.output.amount.multi_asset.to_shallow_primitive()
+        has_coin_a_policy = swap_utxo.output.amount.multi_asset.get(
+            coin_a_policy_id, None
+        )
 
-        new_multi_asset_dict = pyc.MultiAsset()
-        multi_asset_assets_names = pyc.Asset()
-        for swap_policy_id, assets in m_assets.items():
-            if swap_policy_id == policy_id:
-                for asset_name, amount in assets.items():
-                    if asset_name == asset:
-                        multi_asset_assets_names[asset_name] = amount + buying_amount
-                    else:
-                        multi_asset_assets_names[asset_name] = amount
+        if has_coin_a_policy:
+            has_coin_a_asset_name = swap_utxo.output.amount.multi_asset[
+                coin_a_policy_id
+            ].get(coin_a_asset_name, None)
+            if has_coin_a_asset_name:
+                swap_utxo.output.amount.multi_asset[coin_a_policy_id][
+                    coin_a_asset_name
+                ] += buying_amount
+
             else:
-                new_multi_asset_dict[swap_policy_id] = assets
-        new_multi_asset_dict[policy_id] = multi_asset_assets_names
-        return new_multi_asset_dict
+                swap_utxo.output.amount.multi_asset[coin_a_policy_id][
+                    coin_a_asset_name
+                ] = buying_amount
+
+        return swap_utxo.output.amount.multi_asset
 
     async def add_asset_swap_amount(self, buying_amount: int) -> int:
         """The updated swap asset amount to be added at the address"""
@@ -465,20 +470,3 @@ class SwapContract:
                         if asset_name == asset:
                             amount_asset += amount
         return amount_asset
-
-    # async def submit_tx_builder(
-    #     self,
-    #     builder: pyc.TransactionBuilder,
-    #     sk: pyc.PaymentSigningKey,
-    #     address: pyc.Address,
-    # ):
-    #     """Adds collateral and signer to tx, sign and submit tx."""
-    #     non_nft_utxo = await self.chain_query.find_collateral(address, 9000000)
-
-    #     if non_nft_utxo is None:
-    #         non_nft_utxo = await self.chain_query.get_or_create_collateral(address, sk)
-
-    #     builder.collaterals.append(non_nft_utxo)
-    #     # print(builder)
-    #     signed_tx = builder.build_and_sign([sk], change_address=address)
-    #     self.chain_query.submit_tx_without_print(signed_tx)

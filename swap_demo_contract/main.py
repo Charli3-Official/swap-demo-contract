@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import os
 import sys
-from datetime import datetime
 
 import cbor2
 import ogmios
@@ -115,7 +114,7 @@ oracle_nft = MultiAsset.from_primitive(
 
 # Swap NFT identity
 swap_nft = MultiAsset.from_primitive(
-    {"38f143722e0a340027510587d81e49b90904c10fb8271eca13913cd6": {b"SWAP": 1}}
+    {"c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac": {b"SWAP": 1}}
 )
 
 # tUSDT asset information
@@ -271,8 +270,25 @@ def create_parser():
 # Parser command-line arguments
 async def display(args, context):
     oracle_address, swap_address = load_contracts_addresses()
-    swap_script_hash = swap_address.payment_part
-    swap_script = await context.get_plutus_script(swap_script_hash)
+    # swap_script_hash = swap_address.payment_part
+    # print(f"Swap script hash {swap_script_hash}")
+
+    swap_script_path = os.path.join(current_dir, "utils", "scripts", "swap.plutus")
+    with open(swap_script_path, "r") as f:
+        script_hex = f.read()
+        swap_script = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
+
+    # script_hash = plutus_script_hash(swap_script)
+
+    # script_address = Address(script_hash, network=Network.TESTNET)
+    # print(f"NEW SWAP {script_address}")
+    # print(f"script hash {script_hash}")
+
+    # print(f"SWAP SCRIPT HASH {swap_script_hash}")
+    # print(f"Oracle SCRIPT HASH {oracle_script_hash}")
+
+    # Only accesible when submitted one previous transaction
+    # swap_script = await context.get_plutus_script(script_hash)
 
     if args.subparser == "trade" and args.subparser_trade_subparser == "tADA":
         swapInstance = SwapContract(

@@ -44,7 +44,7 @@ class Mint:
     async def mint_nft_with_script(self):
         """mint tokens with plutus v2 script"""
         policy_id = plutus_script_hash(self.minting_script_plutus_v2)
-        asset_name = "ODV-SWAP"
+        asset_name = "SWAP"
         nft_swap = MultiAsset.from_primitive(
             {
                 policy_id.payload: {
