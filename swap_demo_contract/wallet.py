@@ -41,9 +41,6 @@ def user_credentials() -> Address:
     stake_public_key = hdwallet_stake.public_key
     stake_vk = PaymentVerificationKey.from_primitive(stake_public_key)
 
-    str_address = Address(
-        spend_vk.hash(), stake_vk.hash(), network=Network.TESTNET
-    ).encode()
     return spend_vk, stake_vk
 
 
