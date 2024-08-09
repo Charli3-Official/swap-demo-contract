@@ -8,12 +8,17 @@ import ogmios
 import yaml
 from charli3_offchain_core.backend.kupo import KupoContext
 from charli3_offchain_core.chain_query import ChainQuery
+from charli3_offchain_core.oracle_user import OracleUser
 from pycardano import (
     Address,
+    AssetName,
     BlockFrostChainContext,
     MultiAsset,
     Network,
     PlutusV2Script,
+    ScriptHash,
+    TransactionId,
+    TransactionInput,
     plutus_script_hash,
 )
 
@@ -103,9 +108,28 @@ with open(mint_script_path, "r") as f:
 
 # Load user payment key grom wallet file
 extended_payment_skey = w.user_esk()
-
+spend_vk, stake_vk = w.user_credentials()
 # User address wallet
 user_address = w.user_address()
+
+c3_token_hash = ScriptHash.from_primitive(
+    "c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828"
+)
+c3_token_name = AssetName("TestC3".encode())
+
+reference_script_input = (
+    "236d7c1e189c39f0ed2a7a6aa079cfc180d1a089abb2f38173c50e7547e0d9f9#0"
+)
+tx_id_hex, index = reference_script_input.split("#")
+tx_id = TransactionId(bytes.fromhex(tx_id_hex))
+index = int(index)
+reference_script_input = TransactionInput(tx_id, index)
+
+
+# AggState identity
+aggstate_nft = MultiAsset.from_primitive(
+    {"a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f": {b"AggState": 1}}
+)
 
 # Oracle feed NFT identity
 oracle_nft = MultiAsset.from_primitive(
@@ -264,6 +288,21 @@ def create_parser():
         action="store_true",
         help="Print the oracle contract address.",
     )
+
+    # Odv request
+    send_odv_request_parser = subparser.add_parser(
+        "send-odv-request",
+        help="Send a validation request on demand to ODV-Charli3 Oracle.",
+        description="Generate a request for information by prepaying the Charli3 oracles.",
+    )
+
+    send_odv_request_parser.add_argument(
+        "--funds-to-send",
+        type=int,
+        default=None,
+        dest="fundstosend",
+        help="Minimum C3 payment amount for the generation of an oracle-feed.",
+    )
     return parser
 
 
@@ -374,6 +413,27 @@ async def display(args, context):
 
     elif args.subparser == "oracle-contract" and args.address:
         print(f"Oracle contract's address: {oracle_address}")
+
+    elif args.subparser == "send-odv-request":
+        oracle_user = OracleUser(
+            Network.TESTNET,
+            context,
+            extended_payment_skey,
+            spend_vk,
+            stake_vk,
+            str(oracle_address),
+            aggstate_nft,
+            reference_script_input,
+            c3_token_hash,
+            c3_token_name,
+            None,
+            None,
+        )
+        if args.fundstosend:
+            oracle_user.send_odv_request(args.fundstosend)
+        else:
+            funds_to_add = await oracle_user.calc_recommended_funds_amount()
+            await oracle_user.send_odv_request(funds_to_add)
 
 
 def main():
