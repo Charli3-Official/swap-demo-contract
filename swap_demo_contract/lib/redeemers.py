@@ -18,3 +18,10 @@ class SwapB(PlutusData):
 @dataclass
 class AddLiquidity(PlutusData):
     CONSTR_ID = 2
+
+
+@dataclass
+class OdvRequest(PlutusData):
+    """Top up contract redeemer"""
+
+    CONSTR_ID = 8

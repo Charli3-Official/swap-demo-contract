@@ -8,7 +8,6 @@ import ogmios
 import yaml
 from charli3_offchain_core.backend.kupo import KupoContext
 from charli3_offchain_core.chain_query import ChainQuery
-from charli3_offchain_core.oracle_user import OracleUser
 from pycardano import (
     Address,
     AssetName,
@@ -19,10 +18,10 @@ from pycardano import (
     ScriptHash,
     TransactionId,
     TransactionInput,
-    plutus_script_hash,
 )
 
 from . import wallet as w
+from .lib.oracle_user import OracleUser
 from .mint import Mint
 from .swap import Swap, SwapContract
 
@@ -309,25 +308,11 @@ def create_parser():
 # Parser command-line arguments
 async def display(args, context):
     oracle_address, swap_address = load_contracts_addresses()
-    # swap_script_hash = swap_address.payment_part
-    # print(f"Swap script hash {swap_script_hash}")
 
     swap_script_path = os.path.join(current_dir, "utils", "scripts", "swap.plutus")
     with open(swap_script_path, "r") as f:
         script_hex = f.read()
         swap_script = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
-
-    # script_hash = plutus_script_hash(swap_script)
-
-    # script_address = Address(script_hash, network=Network.TESTNET)
-    # print(f"NEW SWAP {script_address}")
-    # print(f"script hash {script_hash}")
-
-    # print(f"SWAP SCRIPT HASH {swap_script_hash}")
-    # print(f"Oracle SCRIPT HASH {oracle_script_hash}")
-
-    # Only accesible when submitted one previous transaction
-    # swap_script = await context.get_plutus_script(script_hash)
 
     if args.subparser == "trade" and args.subparser_trade_subparser == "tADA":
         swapInstance = SwapContract(
@@ -430,9 +415,10 @@ async def display(args, context):
             None,
         )
         if args.fundstosend:
-            oracle_user.send_odv_request(args.fundstosend)
+            await oracle_user.send_odv_request(args.fundstosend)
         else:
             funds_to_add = await oracle_user.calc_recommended_funds_amount()
+            print(f"Minimum quantity required {funds_to_add}")
             await oracle_user.send_odv_request(funds_to_add)
 
 
