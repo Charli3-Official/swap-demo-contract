@@ -10,10 +10,13 @@ from charli3_offchain_core.backend.kupo import KupoContext
 from charli3_offchain_core.chain_query import ChainQuery
 from pycardano import (
     Address,
+    Asset,
     AssetName,
     BlockFrostChainContext,
+    HDWallet,
     MultiAsset,
     Network,
+    PaymentVerificationKey,
     PlutusV2Script,
     ScriptHash,
     TransactionId,
@@ -26,13 +29,52 @@ from .mint import Mint
 from .swap import Swap, SwapContract
 
 
-def load_contracts_addresses():
+def load_contracts_addresses(configyaml):
     """Loads the contracts addresses"""
-    configyaml = load_config()
     return (
         Address.from_primitive(configyaml.get("oracle_contract_address")),
         Address.from_primitive(configyaml.get("swap_contract_address")),
     )
+
+
+def load_swap_config_tokens(configyaml):
+
+    swap_minting_policy = ScriptHash.from_primitive(
+        configyaml.get("swap_minting_policy")
+    )
+    swap_asset_name = AssetName(configyaml.get("swap_asset_name").encode())
+    swap_nft = MultiAsset({swap_minting_policy: Asset({swap_asset_name: 1})})
+
+    token_a_minting_policy = ScriptHash.from_primitive(
+        configyaml.get("token_a_minting_policy")
+    )
+    token_a_asset_name = AssetName(configyaml.get("token_a_asset_name").encode())
+    token_a = MultiAsset({token_a_minting_policy: Asset({token_a_asset_name: 1})})
+    return (swap_nft, token_a)
+
+
+def load_odv_oracle_config_tokens(configyaml):
+    aggstate_minting_policy = ScriptHash.from_primitive(
+        configyaml.get("aggstate_minting_policy")
+    )
+    aggstate_asset_name = AssetName(configyaml.get("aggstate_asset_name").encode())
+    aggstate_nft = MultiAsset(
+        {aggstate_minting_policy: Asset({aggstate_asset_name: 1})}
+    )
+
+    oracle_nft_minting_policy = ScriptHash.from_primitive(
+        configyaml.get("oracle_nft_minting_policy")
+    )
+    oracle_nft_asset_name = AssetName(configyaml.get("oracle_nft_asset_name").encode())
+    oracle_nft = MultiAsset(
+        {oracle_nft_minting_policy: Asset({oracle_nft_asset_name: 1})}
+    )
+
+    c3_token_hash = ScriptHash.from_primitive(configyaml.get("c3_token_hash"))
+
+    c3_token_name = AssetName(configyaml.get("c3_token_name").encode())
+
+    return (aggstate_nft, oracle_nft, c3_token_hash, c3_token_name)
 
 
 def load_config():
@@ -98,55 +140,21 @@ def context(args) -> ChainQuery:
     )
 
 
-# Reading minting script
-current_dir = os.path.dirname(os.path.abspath(__file__))
-mint_script_path = os.path.join(current_dir, "utils", "scripts", "mint_script.plutus")
-with open(mint_script_path, "r") as f:
-    script_hex = f.read()
-    plutus_script_v2 = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
+def user_wallet_address(configyaml):
+    mnemonic_24 = configyaml.get("MNEMONIC_24")
+    hdwallet = HDWallet.from_mnemonic(mnemonic_24)
+    hdwallet_spend = hdwallet.derive_from_path("m/1852'/1815'/0'/0/0")
+    spend_public_key = hdwallet_spend.public_key
+    spend_vk = PaymentVerificationKey.from_primitive(spend_public_key)
 
-# Load user payment key grom wallet file
-extended_payment_skey = w.user_esk()
-spend_vk, stake_vk = w.user_credentials()
-# User address wallet
-user_address = w.user_address()
+    hdwallet_stake = hdwallet.derive_from_path("m/1852'/1815'/0'/2/0")
+    stake_public_key = hdwallet_stake.public_key
+    stake_vk = PaymentVerificationKey.from_primitive(stake_public_key)
 
-c3_token_hash = ScriptHash.from_primitive(
-    "c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828"
-)
-c3_token_name = AssetName("TestC3".encode())
-
-reference_script_input = (
-    "236d7c1e189c39f0ed2a7a6aa079cfc180d1a089abb2f38173c50e7547e0d9f9#0"
-)
-tx_id_hex, index = reference_script_input.split("#")
-tx_id = TransactionId(bytes.fromhex(tx_id_hex))
-index = int(index)
-reference_script_input = TransactionInput(tx_id, index)
-
-
-# AggState identity
-aggstate_nft = MultiAsset.from_primitive(
-    {"a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f": {b"AggState": 1}}
-)
-
-# Oracle feed NFT identity
-oracle_nft = MultiAsset.from_primitive(
-    {"a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f": {b"OracleFeed": 1}}
-)
-
-# Swap NFT identity
-swap_nft = MultiAsset.from_primitive(
-    {"c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac": {b"SWAP": 1}}
-)
-
-# tUSDT asset information
-tUSDT = MultiAsset.from_primitive(
-    {"c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac": {b"USDT": 1}}
-)
-
-# swap instance
-swap = Swap(swap_nft, tUSDT)
+    str_address = Address(
+        spend_vk.hash(), stake_vk.hash(), network=Network.TESTNET
+    ).encode()
+    return Address.from_primitive(str_address)
 
 
 def create_parser():
@@ -307,17 +315,31 @@ def create_parser():
 
 # Parser command-line arguments
 async def display(args, context):
-    oracle_address, swap_address = load_contracts_addresses()
+    configyaml = load_config()
 
+    # NFT configuration
+    oracle_address, swap_address = load_contracts_addresses(configyaml)
+    swap_nft, token_a = load_swap_config_tokens(configyaml)
+    aggstate_nft, oracle_nft, c3_token_hash, c3_token_name = (
+        load_odv_oracle_config_tokens(configyaml)
+    )
+
+    # Load user payment key from wallet file
+    extended_payment_skey = w.user_esk()
+    spend_vk, stake_vk = w.user_credentials()
+
+    # User address wallet
+    user_address = user_wallet_address(configyaml)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
     swap_script_path = os.path.join(current_dir, "utils", "scripts", "swap.plutus")
     with open(swap_script_path, "r") as f:
         script_hex = f.read()
         swap_script = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
 
+    swap = Swap(swap_nft, token_a)
+    swapInstance = SwapContract(context, oracle_nft, oracle_address, swap_address, swap)
+
     if args.subparser == "trade" and args.subparser_trade_subparser == "tADA":
-        swapInstance = SwapContract(
-            context, oracle_nft, oracle_address, swap_address, swap
-        )
         await swapInstance.swap_B(
             args.amount,
             user_address,
@@ -378,6 +400,14 @@ async def display(args, context):
             extended_payment_skey,
         )
     elif args.subparser == "swap-contract" and args.soracle:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        mint_script_path = os.path.join(
+            current_dir, "utils", "scripts", "mint_script.plutus"
+        )
+        with open(mint_script_path, "r") as f:
+            script_hex = f.read()
+            plutus_script_v2 = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
+
         swap_utxo_nft = Mint(
             context, extended_payment_skey, user_address, swap_address, plutus_script_v2
         )
@@ -400,6 +430,12 @@ async def display(args, context):
         print(f"Oracle contract's address: {oracle_address}")
 
     elif args.subparser == "send-odv-request":
+        load_script_input = configyaml.get("script_input_oracle")
+        tx_id_hex, index = load_script_input.split("#")
+        tx_id = TransactionId(bytes.fromhex(tx_id_hex))
+        index = int(index)
+        reference_script_input = TransactionInput(tx_id, index)
+
         oracle_user = OracleUser(
             Network.TESTNET,
             context,
