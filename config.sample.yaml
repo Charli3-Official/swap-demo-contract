@@ -1,8 +1,29 @@
 MNEMONIC_24:
-oracle_contract_address: addr_test1wz58xs5ygmjf9a3p6y3qzmwxp7cyj09zk90rweazvj8vwds4d703u
-swap_contract_address: addr_test1wrcraeyfdkurcz286jaq02hdj5krntc47074vky5j8suhpqew37jy
+
+# Swap Contract
+swap_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
+swap_asset_name: SWAP
+
+token_a_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
+token_a_asset_name: USDT
+
+# Oracle Configuration
+aggstate_minting_policy: a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f
+aggstate_asset_name: AggState
+
+oracle_nft_minting_policy: a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f
+oracle_nft_asset_name: OracleFeed
+
+c3_token_hash: c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828
+c3_token_name: TestC3
+
+script_input_oracle: 236d7c1e189c39f0ed2a7a6aa079cfc180d1a089abb2f38173c50e7547e0d9f9#0
+
+# Contract Addresses
+oracle_contract_address: addr_test1wzy5k07lnrrdjjqwzq4t3vvn0zp5de34s4z7res9y4jjuwcaz3amy
+swap_contract_address: addr_test1wp5p6ztmlsc5agr2crc3yhrqpwrkq7a29a2muyzn3ekdrhqmzzdjz
 blockfrost:
-  project_id:
+  project_id: preprodXXX
 ogmios:
-  ws_url:
-  kupo_url:
+    ws_url: ws://0.0.0.0:1337
+    kupo_url: http://0.0.0.0:1442
