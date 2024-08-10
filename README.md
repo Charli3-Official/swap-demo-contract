@@ -73,9 +73,8 @@ The swap contract enables the exchange of native tokens through a wallet, based 
 
 ### Built With
 
-* [Pycardano 0.7.2](https://pycardano.readthedocs.io/en/latest/index.html)
-* [blockfrost-python 0.5.2](https://pypi.org/project/blockfrost-python/0.5.2/)
-
+* [Pycardano 0.11.1](https://pycardano.readthedocs.io/en/latest/index.html)
+*Note:* Tested with: ogmios:v6.5.0, kupo:v2.8.0, and cardano-node:9.0.0
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 

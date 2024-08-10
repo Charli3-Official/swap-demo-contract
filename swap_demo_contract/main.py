@@ -13,9 +13,11 @@ from pycardano import (
     Asset,
     AssetName,
     BlockFrostChainContext,
+    ExtendedSigningKey,
     HDWallet,
     MultiAsset,
     Network,
+    PaymentSigningKey,
     PaymentVerificationKey,
     PlutusV2Script,
     ScriptHash,
@@ -23,7 +25,6 @@ from pycardano import (
     TransactionInput,
 )
 
-from . import wallet as w
 from .lib.oracle_user import OracleUser
 from .mint import Mint
 from .swap import Swap, SwapContract
@@ -138,6 +139,29 @@ def context(args) -> ChainQuery:
         ogmios_context=ogmios_context,
         kupo_context=kupo_context,
     )
+
+
+def user_wallet_extended_signing_key(configyaml) -> PaymentSigningKey:
+    mnemonic_24 = configyaml.get("MNEMONIC_24")
+    hdwallet = HDWallet.from_mnemonic(mnemonic_24)
+    hdwallet_spend = hdwallet.derive_from_path("m/1852'/1815'/0'/0/0")
+
+    extended_signing_key = ExtendedSigningKey.from_hdwallet(hdwallet_spend)
+    return extended_signing_key
+
+
+def user_wallet_credentials(configyaml) -> Address:
+    mnemonic_24 = configyaml.get("MNEMONIC_24")
+    hdwallet = HDWallet.from_mnemonic(mnemonic_24)
+    hdwallet_spend = hdwallet.derive_from_path("m/1852'/1815'/0'/0/0")
+    spend_public_key = hdwallet_spend.public_key
+    spend_vk = PaymentVerificationKey.from_primitive(spend_public_key)
+
+    hdwallet_stake = hdwallet.derive_from_path("m/1852'/1815'/0'/2/0")
+    stake_public_key = hdwallet_stake.public_key
+    stake_vk = PaymentVerificationKey.from_primitive(stake_public_key)
+
+    return spend_vk, stake_vk
 
 
 def user_wallet_address(configyaml):
@@ -325,8 +349,8 @@ async def display(args, context):
     )
 
     # Load user payment key from wallet file
-    extended_payment_skey = w.user_esk()
-    spend_vk, stake_vk = w.user_credentials()
+    extended_payment_skey = user_wallet_extended_signing_key(configyaml)
+    spend_vk, stake_vk = user_wallet_credentials(configyaml)
 
     # User address wallet
     user_address = user_wallet_address(configyaml)
@@ -364,7 +388,7 @@ async def display(args, context):
         print(f"- {tlovelace // 1000000} tADA ({tlovelace} tlovelace)")
         print(f"- {tUSDT} tUSDT")
     elif args.subparser == "user" and args.address:
-        print(f"User's wallet address (Mnemonic): {w.user_address()}")
+        print(f"User's wallet address (Mnemonic): {user_address}")
 
     elif args.subparser == "swap-contract" and args.liquidity:
         swap_utxo = await swapInstance.get_swap_utxo()
