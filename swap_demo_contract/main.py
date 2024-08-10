@@ -349,9 +349,6 @@ async def display(args, context):
         )
 
     elif args.subparser == "trade" and args.subparser_trade_subparser == "tUSDT":
-        swapInstance = SwapContract(
-            context, oracle_nft, oracle_address, swap_address, swap
-        )
         await swapInstance.swap_A(
             args.amount,
             user_address,
@@ -361,9 +358,6 @@ async def display(args, context):
         )
 
     elif args.subparser == "user" and args.liquidity:
-        swapInstance = SwapContract(
-            context, oracle_nft, oracle_address, swap_address, swap
-        )
         tlovelace = await swapInstance.available_user_tlovelace(user_address)
         tUSDT = await swapInstance.available_user_tusdt(user_address)
         print("User wallet's liquidity:")
@@ -373,9 +367,6 @@ async def display(args, context):
         print(f"User's wallet address (Mnemonic): {w.user_address()}")
 
     elif args.subparser == "swap-contract" and args.liquidity:
-        swapInstance = SwapContract(
-            context, oracle_nft, oracle_address, swap_address, swap
-        )
         swap_utxo = await swapInstance.get_swap_utxo()
         tlovelace = swap_utxo.output.amount.coin
         tUSDT = await swapInstance.add_asset_swap_amount(0)
@@ -388,9 +379,6 @@ async def display(args, context):
         print(f"Swap contract's address: {swap_address}")
 
     elif args.subparser == "swap-contract" and args.addliquidity:
-        swapInstance = SwapContract(
-            context, oracle_nft, oracle_address, swap_address, swap
-        )
         await swapInstance.add_liquidity(
             args.addliquidity[0],
             args.addliquidity[1],
@@ -415,9 +403,6 @@ async def display(args, context):
 
     elif args.subparser == "oracle-contract" and args.feed:
         try:
-            swapInstance = SwapContract(
-                context, oracle_nft, oracle_address, swap_address, swap
-            )
             exchange = await swapInstance.get_oracle_exchange_rate()
 
             print("Charli3 - Oracle Feed")
