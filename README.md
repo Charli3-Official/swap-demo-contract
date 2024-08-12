@@ -94,7 +94,7 @@ The required packages can be installed using pip with the following command:
 
 ### Installation
 
-1. Get an API Key at [Blockfrost](https://blockfrost.io/).
+1. Get an API Key at [Blockfrost](https://blockfrost.io/), Ogmios/Kupo configuration or your personal configuration.
 2. Clone the repo:
    ```sh
    git clone https://github.com/Charli3-Official/swap-pycardano.git
