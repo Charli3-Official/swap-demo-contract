@@ -79,3 +79,22 @@ Alternatively, the user can send any amount they want; however, the contract wil
 #+begin_src bash
 poetry run odv-demo blockfrost preprod send-odv-request --funds-to-send 6500000
 #+end_src
+
+** Off-chain Integration
+For off-chain integration, we use the ~OracleUser(DynamicRewardsMixin)~ class, which enables the ~send_odv_request~ method.
+#+begin_src python
+OracleUser(
+    network,                      # Environment
+    context,                      # Blockchain connection
+    extended_payment_skey,        # Extended signing key for transaction submission
+    spend_vk,                     # Verification signing key for transaction submission
+    stake_vk,                     # Verification signing key for transaction submission
+    str(oracle_address),          # ODV oracle contract address
+    aggstate_nft,                 # ODV oracle contract aggstate UTxO NFT
+    reference_script_input,       # ODV oracle contract reference script transaction
+    c3_token_hash,                # Payment token hash
+    c3_token_name,                # Payment token name
+    dynamic_payment_oracle_addr,  # External Charli3 oracle address for internal conversion
+    dynamic_payment_oracle_nft,   # External Charli3 oracle ~oracle_feed~ NFT for internal conversion
+)
+#+end_src

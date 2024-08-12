@@ -181,7 +181,15 @@ def user_wallet_credentials(configyaml) -> Address:
     return spend_vk, stake_vk
 
 
-def user_wallet_address(configyaml):
+def user_wallet_address(configyaml, args):
+
+    if args.environment == "mainnet":
+        network = Network.MAINNET
+    elif args.environment == "preprod":
+        network = Network.TESTNET
+    else:
+        network = None
+
     mnemonic_24 = configyaml.get("MNEMONIC_24")
     hdwallet = HDWallet.from_mnemonic(mnemonic_24)
     hdwallet_spend = hdwallet.derive_from_path("m/1852'/1815'/0'/0/0")
@@ -192,9 +200,7 @@ def user_wallet_address(configyaml):
     stake_public_key = hdwallet_stake.public_key
     stake_vk = PaymentVerificationKey.from_primitive(stake_public_key)
 
-    str_address = Address(
-        spend_vk.hash(), stake_vk.hash(), network=Network.TESTNET
-    ).encode()
+    str_address = Address(spend_vk.hash(), stake_vk.hash(), network=network).encode()
     return Address.from_primitive(str_address)
 
 
@@ -375,7 +381,7 @@ async def display(args, context):
     spend_vk, stake_vk = user_wallet_credentials(configyaml)
 
     # User address wallet
-    user_address = user_wallet_address(configyaml)
+    user_address = user_wallet_address(configyaml, args)
     current_dir = os.path.dirname(os.path.abspath(__file__))
     swap_script_path = os.path.join(current_dir, "utils", "scripts", "swap.plutus")
     with open(swap_script_path, "r") as f:
@@ -467,8 +473,15 @@ async def display(args, context):
         index = int(index)
         reference_script_input = TransactionInput(tx_id, index)
 
+        if args.environment == "mainnet":
+            network = Network.MAINNET
+        elif args.environment == "preprod":
+            network = Network.TESTNET
+        else:
+            network = None
+
         oracle_user = OracleUser(
-            Network.TESTNET,
+            network,
             context,
             extended_payment_skey,
             spend_vk,
