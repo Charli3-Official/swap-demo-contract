@@ -38,3 +38,9 @@ oracle_settings:
     aggregate_fee: 2500000 # 2.5 C3
     platform_fee: 1000000 # 1 C3
 #+end_src
+
+The `os_node_list` for this ODV oracle contract contains two nodes, and 100% of the nodes in the list are required to submit an aggregation.
+
+To calculate the minimum C3 tokens needed, a user must multiply the `node_fee` by the number of nodes required, then add the `aggregate_fee` and `platform_fee`. In this demo, the calculation is as follows: 1.5 * 2 + 2.5 + 1 = 6.5.
+
+So far, we've demonstrated how to compute a static payment. For a dynamic payment, an external Charli3 oracle contract is used for internal price conversion. You can find more details in the [[https://docs.charli3.io/charli3s-documentation/infrastructure#reward-system][dynamic payment]] documentation.
