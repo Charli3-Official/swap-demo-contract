@@ -72,7 +72,7 @@ dynamic_payment_oracle_asset_name:
 
 The address belongs to the Charli3 oracle for the ~ADA/Charli3~ token pair, while the ~minting policy~ and ~asset name~ correspond to the ~oracle_feed UTxO~ of that particular contract.
 
-For example, if the ADA/Charli3 price is 4.9 ADA per C3, the conversion payment would be 31.85 C3 tokens.
+For example, if the ADA/Charli3 price is 4.9 ADA per C3, the conversion payment would be 31.85 or 31850000 C3 tokens.
 
 Alternatively, the user can send any amount they want; however, the contract will create an aggregation only if the minimum required C3 token amount is covered. Any excess amount will go to the platform administrator for each round, while the nodes will continue to receive rewards according to the pre-established configuration.
 
