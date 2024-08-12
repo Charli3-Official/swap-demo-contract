@@ -1,0 +1,13 @@
+#+title: Odv Request
+Integration of the odv-request transaction
+#+begin_src python
+ λ > poetry run odv-demo blockfrost preprod send-odv-request --help
+usage: python main.py [{blockfrost,ogmios}] [{preprod,mainnet}] send-odv-request [-h] [--funds-to-send FUNDSTOSEND]
+
+Generate a request for information by prepaying the Charli3 oracles.
+
+options:
+  -h, --help            show this help message and exit
+  --funds-to-send FUNDSTOSEND
+                        Minimum C3 payment amount for the generation of an oracle-feed.
+#+end_src
