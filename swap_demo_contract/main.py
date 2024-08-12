@@ -32,10 +32,27 @@ from .swap import Swap, SwapContract
 
 def load_contracts_addresses(configyaml):
     """Loads the contracts addresses"""
+    c3_oracle_rate_nft_hash = ScriptHash.from_primitive(
+        configyaml.get(["dynamic_payment_oracle_minting_policy"], None)
+    )
+    c3_oracle_rate_nft_name = configyaml(["dynamic_payment_oracle_asset_name"])
+
     return (
         Address.from_primitive(configyaml.get("oracle_contract_address")),
         Address.from_primitive(configyaml.get("swap_contract_address")),
+        Address.from_primitive(configyaml.get("dynamic_payment_oracle_addr", None)),
+        create_c3_oracle_rate_nft(c3_oracle_rate_nft_hash, c3_oracle_rate_nft_name),
     )
+
+
+def create_c3_oracle_rate_nft(token_name, minting_policy) -> MultiAsset | None:
+    """Create C3 oracle rate NFT."""
+    if token_name and minting_policy:
+        return MultiAsset.from_primitive(
+            {minting_policy.payload: {bytes(token_name, "utf-8"): 1}}
+        )
+    else:
+        return None
 
 
 def load_swap_config_tokens(configyaml):
@@ -342,7 +359,12 @@ async def display(args, context):
     configyaml = load_config()
 
     # NFT configuration
-    oracle_address, swap_address = load_contracts_addresses(configyaml)
+    (
+        oracle_address,
+        swap_address,
+        dynamic_payment_oracle_addr,
+        dynamic_payment_oracle_nft,
+    ) = load_contracts_addresses(configyaml)
     swap_nft, token_a = load_swap_config_tokens(configyaml)
     aggstate_nft, oracle_nft, c3_token_hash, c3_token_name = (
         load_odv_oracle_config_tokens(configyaml)
@@ -456,8 +478,8 @@ async def display(args, context):
             reference_script_input,
             c3_token_hash,
             c3_token_name,
-            None,
-            None,
+            dynamic_payment_oracle_addr,
+            dynamic_payment_oracle_nft,
         )
         if args.fundstosend:
             await oracle_user.send_odv_request(args.fundstosend)

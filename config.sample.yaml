@@ -1,13 +1,16 @@
 MNEMONIC_24:
 
 # Swap Contract
+swap_contract_address: addr_test1wp5p6ztmlsc5agr2crc3yhrqpwrkq7a29a2muyzn3ekdrhqmzzdjz
 swap_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
-swap_asset_name: SWAP
 
 token_a_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
 token_a_asset_name: USDT
+swap_asset_name: SWAP
 
-# Oracle Configuration
+# Oracle Contract Configuration
+oracle_contract_address: addr_test1wzy5k07lnrrdjjqwzq4t3vvn0zp5de34s4z7res9y4jjuwcaz3amy
+
 aggstate_minting_policy: a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f
 aggstate_asset_name: AggState
 
@@ -19,9 +22,12 @@ c3_token_name: TestC3
 
 script_input_oracle: 236d7c1e189c39f0ed2a7a6aa079cfc180d1a089abb2f38173c50e7547e0d9f9#0
 
+## Dynamic payment oracle
+dynamic_payment_oracle_addr:
+dynamic_payment_oracle_minting_policy:
+dynamic_payment_oracle_asset_name:
+
 # Contract Addresses
-oracle_contract_address: addr_test1wzy5k07lnrrdjjqwzq4t3vvn0zp5de34s4z7res9y4jjuwcaz3amy
-swap_contract_address: addr_test1wp5p6ztmlsc5agr2crc3yhrqpwrkq7a29a2muyzn3ekdrhqmzzdjz
 blockfrost:
   project_id: preprodXXX
 ogmios:
