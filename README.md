@@ -66,7 +66,7 @@ The swap contract enables the exchange of native tokens through a wallet, based 
 * "Swap B" transaction enables the exchange of asset B from the user's wallet to the swap's UTXO in exchange for asset A.
 
 
-*Note:* Documentation for the off-chain integration of the send-odv-request can be found [here](https://github.com/Charli3-Official/swap-demo-contract/tree/main/swap_demo_contract/docs).
+*Note:* Documentation for the off-chain integration of the send-odv-request can be found [here](https://github.com/Charli3-Official/swap-demo-contract/blob/main/swap_demo_contract/docs/odv-request.org).
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
@@ -173,7 +173,7 @@ Copyrigth: (c) 2020 - 2024 Charli3
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-Documentation for the off-chain integration of the send-odv-request can be found [here](https://github.com/Charli3-Official/swap-demo-contract/tree/main/swap_demo_contract/docs).
+Documentation for the off-chain integration of the send-odv-request can be found [here](https://github.com/Charli3-Official/swap-demo-contract/blob/main/swap_demo_contract/docs/odv-request.org).
 
 <!-- LICENSE -->
 ## License
