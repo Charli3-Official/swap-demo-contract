@@ -65,6 +65,8 @@ The swap contract enables the exchange of native tokens through a wallet, based 
 * "Swap A" transaction allows the exchange of asset A from the user's wallet to the swap's UTXO in exchange for asset B.
 * "Swap B" transaction enables the exchange of asset B from the user's wallet to the swap's UTXO in exchange for asset A.
 
+
+*Note:* Documentation for the off-chain integration of the send-odv-request can be found [here](https://github.com/Charli3-Official/swap-demo-contract/tree/main/swap_demo_contract/docs).
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
@@ -100,44 +102,44 @@ The required packages can be installed using pip with the following command:
    git clone https://github.com/Charli3-Official/swap-pycardano.git
    ```
 3. Enter your API and personal configuration based on `config.sample.yaml`.
-```
-MNEMONIC_24:
+   ```
+   MNEMONIC_24:
 
-# Swap Contract
-swap_contract_address: addr_test1wp5p6ztmlsc5agr2crc3yhrqpwrkq7a29a2muyzn3ekdrhqmzzdjz
-swap_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
+   # Swap Contract
+   swap_contract_address: addr_test1wp5p6ztmlsc5agr2crc3yhrqpwrkq7a29a2muyzn3ekdrhqmzzdjz
+   swap_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
 
-token_a_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
-token_a_asset_name: USDT
-swap_asset_name: SWAP
+   token_a_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
+   token_a_asset_name: USDT
+   swap_asset_name: SWAP
 
-# Oracle Contract Configuration
-oracle_contract_address: addr_test1wzy5k07lnrrdjjqwzq4t3vvn0zp5de34s4z7res9y4jjuwcaz3amy
+   # Oracle Contract Configuration
+   oracle_contract_address: addr_test1wzy5k07lnrrdjjqwzq4t3vvn0zp5de34s4z7res9y4jjuwcaz3amy
 
-aggstate_minting_policy: a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f
-aggstate_asset_name: AggState
+   aggstate_minting_policy: a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f
+   aggstate_asset_name: AggState
 
-oracle_nft_minting_policy: a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f
-oracle_nft_asset_name: OracleFeed
+   oracle_nft_minting_policy: a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f
+   oracle_nft_asset_name: OracleFeed
 
-c3_token_hash: c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828
-c3_token_name: TestC3
+   c3_token_hash: c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828
+   c3_token_name: TestC3
 
-script_input_oracle: 236d7c1e189c39f0ed2a7a6aa079cfc180d1a089abb2f38173c50e7547e0d9f9#0
+   script_input_oracle: 236d7c1e189c39f0ed2a7a6aa079cfc180d1a089abb2f38173c50e7547e0d9f9#0
 
-## Dynamic payment oracle
-dynamic_payment_oracle_addr:
-dynamic_payment_oracle_minting_policy:
-dynamic_payment_oracle_asset_name:
+   ## Dynamic payment oracle
+   dynamic_payment_oracle_addr:
+   dynamic_payment_oracle_minting_policy:
+   dynamic_payment_oracle_asset_name:
 
-# Contract Addresses
-blockfrost:
-  project_id: preprodXXX
-ogmios:
-    ws_url: ws://0.0.0.0:1337
-    kupo_url: http://0.0.0.0:1442
+   # Contract Addresses
+   blockfrost:
+     project_id: preprodXXX
+   ogmios:
+       ws_url: ws://0.0.0.0:1337
+       kupo_url: http://0.0.0.0:1442
 
-```
+   ```
 
   <p align="right">(<a href="#readme-top">back to top</a>)</p>
 <!-- USAGE EXAMPLES -->
