@@ -98,3 +98,5 @@ OracleUser(
     dynamic_payment_oracle_nft,   # External Charli3 oracle ~oracle_feed~ NFT for internal conversion
 )
 #+end_src
+
+We recommend reviewing the files ~swap_demo_contract/lib/oracle_user.py~ and ~swap_demo_contract/lib/dynamic_rewards.py~ for a deeper understanding of how to create an ODV request.
