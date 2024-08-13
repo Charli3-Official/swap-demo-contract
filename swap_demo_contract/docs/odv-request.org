@@ -1,0 +1,102 @@
+#+title: Odv Request
+Integration of the odv-request transaction
+#+begin_src bash
+ λ > poetry run odv-demo blockfrost preprod send-odv-request --help
+usage: python main.py [{blockfrost,ogmios}] [{preprod,mainnet}] send-odv-request [-h] [--funds-to-send FUNDSTOSEND]
+
+Generate a request for information by prepaying the Charli3 oracles.
+
+options:
+  -h, --help            show this help message and exit
+  --funds-to-send FUNDSTOSEND
+                        Minimum C3 payment amount for the generation of an oracle-feed.
+#+end_src
+
+Generating an ODV request involves sending a pre-calculated amount of C3 tokens to the ODV contract. When this is done, the backend configured for that contract will detect the payment of the C3 tokens and, within approximately one minute, the ODV contract will generate a new oracle feed.
+
+The pre-calculated amount of C3 tokens is determined based on the internal configuration of the ODV contract (specifically, the aggstate datum). These C3 tokens are used to compensate each individual C3 node in the network and to pay the contract administrator for monitoring and maintenance.
+
+The swap contract supports the operation of sending an ODV request using the following command:
+
+#+begin_src bash
+poetry run odv-demo blockfrost preprod send-odv-request
+#+end_src
+
+This command automatically calculates the required amount of C3 tokens needed to generate the aggregation.
+
+Let's use the following toy ODV oracle contract as an example to determine the minimum C3 tokens required. Its internal oracle configuration is as follows:
+#+begin_src yml
+oracle_settings:
+  os_node_list:
+    [
+       "49bd983d12353a48d39ad15212220ebd71dd3f897eb29ab89f3cb58e",
+       "8e9ed3986a773db2420b0604357a65f5d9d26d094279918ad405fdca"
+    ]
+  os_updated_nodes: 10000 # 100%
+  os_node_fee_price:
+    node_fee: 1500000 # 1.5 C3
+    aggregate_fee: 2500000 # 2.5 C3
+    platform_fee: 1000000 # 1 C3
+#+end_src
+
+The ~os_node_list~ for this ODV oracle contract contains two nodes, and 100% of the nodes in the list are required to submit an aggregation.
+
+To calculate the minimum C3 tokens needed, a user must multiply the ~node_fee~ by the number of nodes required, then add the ~aggregate_fee~ and ~platform_fee~. In this demo, the calculation is as follows: 1.5 * 2 + 2.5 + 1 = 6.5. Then 6500000 C3 tokens are required.
+
+So far, we've demonstrated how to compute a static payment. For a dynamic payment, an external Charli3 oracle contract is used for internal price conversion. You can find more details in the [[https://docs.charli3.io/charli3s-documentation/infrastructure#reward-system][dynamic payment]] documentation.
+The main concept behind dynamic payment is to use an external Charli3 oracle contract for payment conversion. For instance, let's consider an oracle with the following rewards:
+
+#+begin_src yml
+oracle_settings:
+  os_node_list:
+    [
+       "49bd983d12353a48d39ad15212220ebd71dd3f897eb29ab89f3cb58e",
+       "8e9ed3986a773db2420b0604357a65f5d9d26d094279918ad405fdca"
+    ]
+  os_updated_nodes: 10000 # 100%
+  os_node_fee_price:
+    node_fee: 1500000 # 1.5 ADA
+    aggregate_fee: 2500000 # 2.5 ADA
+    platform_fee: 1000000 # 1 ADA
+#+end_src
+
+The key difference is that we are now using ADA as the payment value, while the actual reward token delivered is C3, ensuring the payment retains its ADA value.
+This configuration can be found in the ~config.sample.yaml~ file.
+
+#+begin_src bash
+## Dynamic payment oracle
+dynamic_payment_oracle_addr:
+dynamic_payment_oracle_minting_policy:
+dynamic_payment_oracle_asset_name:
+#+end_src
+
+The address belongs to the Charli3 oracle for the ~ADA/Charli3~ token pair, while the ~minting policy~ and ~asset name~ correspond to the ~oracle_feed UTxO~ of that particular contract.
+
+For example, if the ADA/Charli3 price is 4.9 ADA per C3, the conversion payment would be 31.85 or 31850000 C3 tokens.
+
+Alternatively, the user can send any amount they want; however, the contract will create an aggregation only if the minimum required C3 token amount is covered. Any excess amount will go to the platform administrator for each round, while the nodes will continue to receive rewards according to the pre-established configuration.
+
+#+begin_src bash
+poetry run odv-demo blockfrost preprod send-odv-request --funds-to-send 6500000
+#+end_src
+
+** Off-chain Integration
+For off-chain integration, we use the ~OracleUser(DynamicRewardsMixin)~ class, which enables the ~send_odv_request~ method.
+#+begin_src python
+OracleUser(
+    network,                      # Environment
+    context,                      # Blockchain connection
+    extended_payment_skey,        # Extended signing key for transaction submission
+    spend_vk,                     # Verification signing key for transaction submission
+    stake_vk,                     # Verification signing key for transaction submission
+    str(oracle_address),          # ODV oracle contract address
+    aggstate_nft,                 # ODV oracle contract aggstate UTxO NFT
+    reference_script_input,       # ODV oracle contract reference script transaction
+    c3_token_hash,                # Payment token hash
+    c3_token_name,                # Payment token name
+    dynamic_payment_oracle_addr,  # External Charli3 oracle address for internal conversion
+    dynamic_payment_oracle_nft,   # External Charli3 oracle ~oracle_feed~ NFT for internal conversion
+)
+#+end_src
+
+We recommend reviewing the files ~swap_demo_contract/lib/oracle_user.py~ and ~swap_demo_contract/lib/dynamic_rewards.py~ for a deeper understanding of how to create an ODV request.
