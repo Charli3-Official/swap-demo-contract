@@ -3,7 +3,8 @@
 from datetime import datetime
 
 import pycardano as pyc
-from charli3_offchain_core.chain_query import ChainQuery
+
+from swap_demo_contract.lib.chain_query import ChainQuery
 
 from .lib.datums import GenericData
 from .lib.redeemers import AddLiquidity, SwapA, SwapB
@@ -270,6 +271,7 @@ class SwapContract:
     async def swap_b_with_a(self, amount_b: int) -> int:
         """Operation for swaping coin B with A"""
         exchange_rate_price = await self.get_oracle_exchange_rate()
+        print(exchange_rate_price)
         print(
             f"Oracle exchange rate: {exchange_rate_price / self.coin_precision} tUSDT/tADA (A/B)"
         )
@@ -288,7 +290,12 @@ class SwapContract:
         return datetime.utcfromtimestamp(timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
 
     async def get_oracle_exchange_rate(self) -> int:
-        """Get the oracle's feed exchange rate"""
+        """
+        Get the oracle's feed exchange rate and return a tuple of the price and UTxO object.
+
+        Returns:
+            A tuple containing the exchange rate and the UTxO object, or None if not available.
+        """
         price = 0
         oracle_feed_utxo = await self.get_oracle_utxo()
 

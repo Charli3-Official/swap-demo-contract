@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 
-from charli3_offchain_core.chain_query import ChainQuery
 from pycardano import (
     Address,
     AlonzoMetadata,
@@ -19,6 +18,8 @@ from pycardano import (
     Value,
     plutus_script_hash,
 )
+
+from swap_demo_contract.lib.chain_query import ChainQuery
 
 
 @dataclass

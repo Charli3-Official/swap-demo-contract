@@ -1,11 +1,10 @@
 from copy import deepcopy
-from typing import Tuple
+from typing import List, Tuple
 
-from charli3_offchain_core.chain_query import ChainQuery
-from charli3_offchain_core.oracle_checks import c3_get_rate, filter_utxos_by_asset
 from pycardano import Address, MultiAsset, Network, UTxO
 
-from .datums import AggDatum, PriceRewards
+from .chain_query import ChainQuery
+from .datums import AggDatum, GenericData, PriceRewards
 
 # CONSTANT
 COIN_PRECISION = 1000000
@@ -13,7 +12,7 @@ COIN_PRECISION = 1000000
 
 def mk_scale_reward(c3_oracle_rate_feed: float):
     def scale_reward(val: int) -> int:
-        return (val * c3_oracle_rate_feed) // COIN_PRECISION
+        return int((val * c3_oracle_rate_feed) // COIN_PRECISION)
 
     return scale_reward
 
@@ -55,11 +54,79 @@ class DynamicRewardsMixin:
             else None
         )
         if c3_oracle_rate_utxos is not None:
-            (c3_oracle_rate_feed, c3_oracle_rate_utxo) = c3_get_rate(
+            (c3_oracle_rate_feed, c3_oracle_rate_utxo) = self.c3_get_rate(
                 c3_oracle_rate_utxos, self.oracle_rate_nft
             )
         self.c3_oracle_rate_feed = c3_oracle_rate_feed
         self.c3_oracle_rate_utxo = c3_oracle_rate_utxo
+
+    def c3_get_rate(
+        self, oracle_rate_utxos: List[UTxO], rate_nft: MultiAsset
+    ) -> Tuple[float, UTxO]:
+        """
+        Get exchange rate from oracle rate utxo
+
+        Args:
+            oracle_rate_utxos: A list of UTxO objects to be filtered.
+            rate_nft: The rate NFT.
+
+        Returns:
+            A tuple containing the exchange rate and the UTxO object that is valid according to the
+            specified criteria.
+        """
+        if rate_nft and oracle_rate_utxos:
+            rate_utxo = self.c3_get_oracle_rate_utxo_with_datum(
+                oracle_rate_utxos, rate_nft
+            )
+
+            rate_datum: GenericData = rate_utxo.output.datum
+            return (rate_datum.price_data.get_price(), rate_utxo)
+        else:
+            return (None, None)
+
+    def c3_get_oracle_rate_utxo_with_datum(
+        self, oracle_utxos: List[UTxO], rate_nft: MultiAsset
+    ) -> UTxO:
+        """Get oracle rate utxo with datum
+
+        Args:
+            oracle_utxos: A list of UTxO objects to be filtered.
+            rate_nft: The rate NFT.
+
+        Returns:
+            A UTxO object that is valid according to the specified criteria."""
+        rate_utxo = next(
+            (
+                utxo
+                for utxo in oracle_utxos
+                if utxo.output.amount.multi_asset >= rate_nft
+            ),
+            None,
+        )
+
+        try:
+            if rate_utxo.output.datum:
+                rate_utxo.output.datum = GenericData.from_cbor(
+                    rate_utxo.output.datum.cbor
+                )
+        except Exception:
+            print("Invalid CBOR data for OracleDatum (Exchange rate)")
+        return rate_utxo
+
+    def filter_utxos_by_asset(self, utxos: List[UTxO], asset: MultiAsset) -> List[UTxO]:
+        """Filter list of UTxOs by given asset type.
+
+        Args:
+            utxos: A list of UTxO objects to be filtered.
+            asset: The asset type to filter by.
+
+        Returns:
+            A list of UTxO objects that match the specified asset type.
+        """
+        if utxos is None or not utxos:
+            return []
+
+        return list(filter(lambda x: x.output.amount.multi_asset >= asset, utxos))
 
     async def calc_recommended_funds_amount(
         self, oracle_settings: None | AggDatum = None
@@ -87,7 +154,9 @@ class DynamicRewardsMixin:
     async def _get_aggstate_utxo_and_datum(self) -> Tuple[UTxO, AggDatum]:
         """Get aggstate utxo and datum."""
         oracle_utxos = await self.chain_query.get_utxos(self.oracle_addr)
-        aggstate_utxo: UTxO = filter_utxos_by_asset(oracle_utxos, self.aggstate_nft)[0]
+        aggstate_utxo: UTxO = self.filter_utxos_by_asset(
+            oracle_utxos, self.aggstate_nft
+        )[0]
 
         if aggstate_utxo.output.datum and not isinstance(
             aggstate_utxo.output.datum, AggDatum

@@ -6,7 +6,8 @@ and
 https://docs.charli3.io/charli3s-documentation/oracle-feeds-datum-standard
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Optional
 
 from pycardano import PlutusData
 from pycardano.serialization import IndefiniteList
@@ -42,7 +43,7 @@ class GenericData(PlutusData):
     """Oracle Datum"""
 
     CONSTR_ID = 0
-    price_data: PriceData
+    price_data: Optional[PriceData] = field(default=None, metadata={"optional": True})
 
 
 # ------------------------------#

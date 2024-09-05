@@ -4,10 +4,7 @@ import os
 import sys
 
 import cbor2
-import ogmios
 import yaml
-from charli3_offchain_core.backend.kupo import KupoContext
-from charli3_offchain_core.chain_query import ChainQuery
 from pycardano import (
     Address,
     Asset,
@@ -17,6 +14,7 @@ from pycardano import (
     HDWallet,
     MultiAsset,
     Network,
+    OgmiosV6ChainContext,
     PaymentSigningKey,
     PaymentVerificationKey,
     PlutusV2Script,
@@ -25,38 +23,56 @@ from pycardano import (
     TransactionInput,
 )
 
+from swap_demo_contract.lib.chain_query import ChainQuery
+from swap_demo_contract.lib.kupo import KupoContext
+
 from .lib.oracle_user import OracleUser
 from .mint import Mint
 from .swap import Swap, SwapContract
 
 
 def load_contracts_addresses(configyaml):
-    """Loads the contracts addresses"""
-    c3_oracle_rate_nft_hash = ScriptHash.from_primitive(
-        configyaml.get(["dynamic_payment_oracle_minting_policy"], None)
+    """Loads the contract addresses"""
+
+    # Fetch necessary config values
+    minting_policy = configyaml.get("dynamic_payment_oracle_minting_policy")
+    asset_name = configyaml.get("dynamic_payment_oracle_asset_name")
+    oracle_rate_address = configyaml.get("dynamic_payment_oracle_addr")
+    oracle_contract_address = configyaml.get("oracle_contract_address")
+    swap_contract_address = configyaml.get("swap_contract_address")
+
+    # Convert minting policy to ScriptHash if available
+    oracle_rate_nft_hash = (
+        ScriptHash.from_primitive(minting_policy) if minting_policy else None
     )
-    c3_oracle_rate_nft_name = configyaml(["dynamic_payment_oracle_asset_name"])
 
-    return (
-        Address.from_primitive(configyaml.get("oracle_contract_address")),
-        Address.from_primitive(configyaml.get("swap_contract_address")),
-        Address.from_primitive(configyaml.get("dynamic_payment_oracle_addr", None)),
-        create_c3_oracle_rate_nft(c3_oracle_rate_nft_hash, c3_oracle_rate_nft_name),
-    )
+    if oracle_rate_nft_hash and asset_name and oracle_rate_address:
+        return (
+            Address.from_primitive(oracle_contract_address),
+            Address.from_primitive(swap_contract_address),
+            Address.from_primitive(oracle_rate_address),
+            create_c3_oracle_rate_nft(oracle_rate_nft_hash, asset_name),
+        )
+    else:
+        return (
+            Address.from_primitive(oracle_contract_address),
+            Address.from_primitive(swap_contract_address),
+            None,
+            None,
+        )
 
 
-def create_c3_oracle_rate_nft(token_name, minting_policy) -> MultiAsset | None:
+def create_c3_oracle_rate_nft(minting_policy, token_name) -> MultiAsset | None:
     """Create C3 oracle rate NFT."""
     if token_name and minting_policy:
         return MultiAsset.from_primitive(
-            {minting_policy.payload: {bytes(token_name, "utf-8"): 1}}
+            {minting_policy.payload: {token_name.encode(): 1}}
         )
     else:
         return None
 
 
 def load_swap_config_tokens(configyaml):
-
     swap_minting_policy = ScriptHash.from_primitive(
         configyaml.get("swap_minting_policy")
     )
@@ -145,7 +161,7 @@ def context(args) -> ChainQuery:
 
         _, ws_string = ogmios_ws_url.split("ws://")
         ws_url, port = ws_string.split(":")
-        ogmios_context = ogmios.OgmiosChainContext(
+        ogmios_context = OgmiosV6ChainContext(
             host=ws_url, port=int(port), network=network
         )
 
@@ -182,7 +198,6 @@ def user_wallet_credentials(configyaml) -> Address:
 
 
 def user_wallet_address(configyaml, args):
-
     if args.environment == "mainnet":
         network = Network.MAINNET
     elif args.environment == "preprod":
@@ -372,9 +387,12 @@ async def display(args, context):
         dynamic_payment_oracle_nft,
     ) = load_contracts_addresses(configyaml)
     swap_nft, token_a = load_swap_config_tokens(configyaml)
-    aggstate_nft, oracle_nft, c3_token_hash, c3_token_name = (
-        load_odv_oracle_config_tokens(configyaml)
-    )
+    (
+        aggstate_nft,
+        oracle_nft,
+        c3_token_hash,
+        c3_token_name,
+    ) = load_odv_oracle_config_tokens(configyaml)
 
     # Load user payment key from wallet file
     extended_payment_skey = user_wallet_extended_signing_key(configyaml)
@@ -427,7 +445,6 @@ async def display(args, context):
         print(f"- {tUSDT} tUSDT")
 
     elif args.subparser == "swap-contract" and args.address:
-
         print(f"Swap contract's address: {swap_address}")
 
     elif args.subparser == "swap-contract" and args.addliquidity:

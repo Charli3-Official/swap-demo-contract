@@ -3,8 +3,6 @@
 from copy import deepcopy
 from typing import Optional, Union
 
-from charli3_offchain_core.chain_query import ChainQuery
-from charli3_offchain_core.utils.logging_config import logging
 from pycardano import (
     Address,
     AlonzoMetadata,
@@ -24,10 +22,10 @@ from pycardano import (
     TransactionInput,
 )
 
+from swap_demo_contract.lib.chain_query import ChainQuery
+
 from .dynamic_rewards import DynamicRewardsMixin
 from .redeemers import OdvRequest
-
-logger = logging.getLogger("Oracle-User")
 
 
 class OracleUser(DynamicRewardsMixin):
@@ -91,10 +89,10 @@ class OracleUser(DynamicRewardsMixin):
         assert funds > 0, "Funds should be greater than 0."
         recommended_funds = await self.calc_recommended_funds_amount(aggstate_datum)
         if funds < recommended_funds:
-            logger.warn(f"Recommended funds amount is {recommended_funds}, got {funds}")
+            print(f"Recommended funds amount is {recommended_funds}, got {funds}")
 
         # prepare datums, redeemers and new node utxos for eligible nodes
-        builder = TransactionBuilder(self.chain_query.context)
+        builder = TransactionBuilder(self.chain_query.context, fee_buffer=225615)
         builder.add_script_input(
             aggstate_utxo,
             script=script_utxo,
