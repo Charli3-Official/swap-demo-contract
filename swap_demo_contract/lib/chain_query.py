@@ -1,7 +1,7 @@
 """This module contains the ChainQuery class, which is used to query the blockchain."""
 
 import asyncio
-from typing import List, Literal, Mapping, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import cbor2
 from blockfrost import ApiError
@@ -9,12 +9,10 @@ from pycardano import (
     Address,
     BlockFrostChainContext,
     ExtendedSigningKey,
-    GenesisParameters,
     InsufficientUTxOBalanceException,
     OgmiosV6ChainContext,
     PaymentSigningKey,
     PlutusV2Script,
-    RawCBOR,
     ScriptHash,
     Transaction,
     TransactionBuilder,
@@ -23,13 +21,12 @@ from pycardano import (
     TransactionOutput,
     UTxO,
     UTxOSelectionException,
-    VerificationKeyWitness,
     plutus_script_hash,
 )
 
 
 class KupoContext:
-    async def utxos_kupo(self, address: str) -> List[UTxO]:
+    async def utxos_kupo(self, _: str) -> List[UTxO]:
         pass
 
 

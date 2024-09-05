@@ -1,6 +1,6 @@
 """Kupo context to query on-chain data"""
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import cbor2
 import pycardano as pyc

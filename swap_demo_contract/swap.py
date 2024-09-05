@@ -271,6 +271,7 @@ class SwapContract:
     async def swap_b_with_a(self, amount_b: int) -> int:
         """Operation for swaping coin B with A"""
         exchange_rate_price = await self.get_oracle_exchange_rate()
+        print(exchange_rate_price)
         print(
             f"Oracle exchange rate: {exchange_rate_price / self.coin_precision} tUSDT/tADA (A/B)"
         )
@@ -295,27 +296,19 @@ class SwapContract:
         Returns:
             A tuple containing the exchange rate and the UTxO object, or None if not available.
         """
-        # Fetch oracle UTxO
-        oracle_feed_utxos = await self.get_oracle_utxo()
+        price = 0
+        oracle_feed_utxo = await self.get_oracle_utxo()
 
-        # Check if we have a valid UTxO and datum
-        if oracle_feed_utxos and oracle_feed_utxos.output.datum:
-            oracle_feed_datum: GenericData = oracle_feed_utxos.output.datum
-
-            # Check if the datum has the required price_data attribute
-            if (
-                hasattr(oracle_feed_datum, "price_data")
-                and oracle_feed_datum.price_data
-            ):
-                return oracle_feed_datum.price_data.get_price()
-            else:
-                print(
-                    "Warning: oracle_feed_datum does not have price_data or it's None"
+        if oracle_feed_utxo.output.datum and not isinstance(
+            oracle_feed_utxo.output.datum, GenericData
+        ):
+            if oracle_feed_utxo.output.datum.cbor:
+                oracle_inline_datum = GenericData.from_cbor(
+                    oracle_feed_utxo.output.datum.cbor
                 )
-                return 0
-        else:
-            print("Warning: No valid oracle UTxO or datum found")
-            return 0
+                price = oracle_inline_datum.price_data.get_price()
+
+        return price
 
     async def get_oracle_timestamp(self) -> int:
         """Get the oracle's feed exchange rate"""
