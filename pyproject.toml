@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "swap-demo-contract"
+version = "0.1.0"
+description = "Swap contract featuring Charli3 on-demand oracle feeds."
+authors = ["xxAVOGADROxx <jose.seraquive@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pycardano = {git = "https://github.com/Python-Cardano/pycardano.git", rev = "7243cd9e6e91caa8175898fcc870d3669e3af8ca"}
+pre-commit = "^3.7.0"
+aiohttp = "^3.9.5"
+ogmios = "^1.1.1"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.1.0"
+black = "^24.4.2"
+
+[tool.isort]
+profile = "black"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+odv-demo = "swap_demo_contract.main:main"

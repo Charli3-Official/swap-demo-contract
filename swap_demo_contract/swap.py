@@ -3,7 +3,8 @@
 from datetime import datetime
 
 import pycardano as pyc
-from charli3_offchain_core.chain_query import ChainQuery
+
+from swap_demo_contract.lib.chain_query import ChainQuery
 
 from .lib.datums import GenericData
 from .lib.redeemers import AddLiquidity, SwapA, SwapB
@@ -288,20 +289,33 @@ class SwapContract:
         return datetime.utcfromtimestamp(timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
 
     async def get_oracle_exchange_rate(self) -> int:
-        """Get the oracle's feed exchange rate"""
-        price = 0
-        oracle_feed_utxo = await self.get_oracle_utxo()
+        """
+        Get the oracle's feed exchange rate and return a tuple of the price and UTxO object.
 
-        if oracle_feed_utxo.output.datum and not isinstance(
-            oracle_feed_utxo.output.datum, GenericData
-        ):
-            if oracle_feed_utxo.output.datum.cbor:
-                oracle_inline_datum = GenericData.from_cbor(
-                    oracle_feed_utxo.output.datum.cbor
+        Returns:
+            A tuple containing the exchange rate and the UTxO object, or None if not available.
+        """
+        # Fetch oracle UTxO
+        oracle_feed_utxos = await self.get_oracle_utxo()
+
+        # Check if we have a valid UTxO and datum
+        if oracle_feed_utxos and oracle_feed_utxos.output.datum:
+            oracle_feed_datum: GenericData = oracle_feed_utxos.output.datum
+
+            # Check if the datum has the required price_data attribute
+            if (
+                hasattr(oracle_feed_datum, "price_data")
+                and oracle_feed_datum.price_data
+            ):
+                return oracle_feed_datum.price_data.get_price()
+            else:
+                print(
+                    "Warning: oracle_feed_datum does not have price_data or it's None"
                 )
-                price = oracle_inline_datum.price_data.get_price()
-
-        return price
+                return 0
+        else:
+            print("Warning: No valid oracle UTxO or datum found")
+            return 0
 
     async def get_oracle_timestamp(self) -> int:
         """Get the oracle's feed exchange rate"""
