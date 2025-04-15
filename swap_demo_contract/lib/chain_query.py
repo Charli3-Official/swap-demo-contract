@@ -1,448 +1,598 @@
-"""This module contains the ChainQuery class, which is used to query the blockchain."""
+"""Core chain query implementation that wraps BlockFrost and Kupo/Ogmios contexts.
+
+Provides unified interface for blockchain interactions with robust error handling,
+accurate time calculations, and configurable parameters.
+"""
 
 import asyncio
-from typing import List, Optional, Tuple, Union
+import logging
+import time
+from dataclasses import dataclass
 
-import cbor2
+import requests
 from blockfrost import ApiError
 from pycardano import (
     Address,
+    AssetName,
     BlockFrostChainContext,
     ExtendedSigningKey,
-    InsufficientUTxOBalanceException,
-    OgmiosV6ChainContext,
+    GenesisParameters,
+    NativeScript,
     PaymentSigningKey,
-    PlutusV2Script,
+    PlutusV3Script,
     ScriptHash,
     Transaction,
     TransactionBuilder,
     TransactionId,
-    TransactionInput,
     TransactionOutput,
     UTxO,
-    UTxOSelectionException,
-    plutus_script_hash,
+)
+from pycardano.backend.kupo import KupoChainContextExtension
+
+from swap_demo_contract.lib.network import NetworkConfig, NetworkType, get_network_type
+
+from .exceptions import (
+    ChainContextError,
+    CollateralError,
+    NetworkConfigError,
+    ScriptQueryError,
+    TransactionConfirmationError,
+    TransactionSubmissionError,
+    UTxOQueryError,
 )
 
+logger = logging.getLogger(__name__)
 
-class KupoContext:
-    async def utxos_kupo(self, _: str) -> List[UTxO]:
-        pass
+NotFoundErrorCode = 404
+
+
+@dataclass
+class ValidityWindow:
+    """Validity start, end, and current time."""
+
+    validity_start: int
+    validity_end: int
+    current_time: int
+
+
+@dataclass
+class ChainQueryConfig:
+    """Configuration parameters for chain query operations."""
+
+    # Transaction handling
+    max_retries: int = 10
+    retry_delay: int = 20  # seconds
+    submission_timeout: int = 120  # seconds
+    utxo_refresh_delay: int = 5  # seconds
+
+    # Collateral settings
+    min_collateral: int = 5_000_000  # lovelace
+    max_collateral: int = 20_000_000  # lovelace
+    collateral_buffer: int = 1_000_000  # acceptable variance
+
+    # Transaction parameters
+    validity_start_offset: int = 0
+    ttl_offset: int = 120
+    min_utxo_value: int = 2_000_000
+
+    # Time handling
+    use_wall_clock: bool = False
+    network_config: NetworkConfig | None = None
 
 
 class ChainQuery:
-    """chainQuery methods"""
+    """Unified interface for blockchain operations using either Blockfrost or Kupo/Ogmios."""
 
     def __init__(
         self,
-        blockfrost_context: BlockFrostChainContext = None,
-        ogmios_context: OgmiosV6ChainContext = None,
-        kupo_context: Optional[KupoContext] = None,
-        oracle_address: str = None,
-        is_local_testnet: bool = False,
-    ):
-        if blockfrost_context is None and ogmios_context is None:
-            raise ValueError("At least one of the chain contexts must be provided.")
-
-        self.blockfrost_context = blockfrost_context
-        self.ogmios_context = ogmios_context
-        self.kupo_context = kupo_context
-        self.oracle_address = oracle_address
-        self.context = blockfrost_context if blockfrost_context else ogmios_context
-        self.is_local_testnet = is_local_testnet
-
-        self._datum_cache = {}
-
-    async def get_utxos(self, address: Union[str, Address, None] = None) -> List[UTxO]:
-        """
-        get utxos from oracle address.
+        blockfrost_context: BlockFrostChainContext | None = None,
+        kupo_ogmios_context: KupoChainContextExtension | None = None,
+        config: ChainQueryConfig | None = None,
+    ) -> None:
+        """Initialize chain query interface.
 
         Args:
-            address (str, Address, optional): The address to get the utxos from. Defaults to None.
+            blockfrost_context: Optional Blockfrost chain context
+            kupo_ogmios_context: Optional Kupo/Ogmios chain context
+            config: Optional configuration parameters
 
-        Returns:
-            List[UTxO]: The list of utxos.
+        Raises:
+            ChainContextError: If no valid context is provided
         """
-        if address is None:
-            address = self.oracle_address
-        if self.blockfrost_context is not None:
-            print("Getting utxos from blockfrost")
-            return self.blockfrost_context.utxos(str(address))
-        if self.ogmios_context is not None:
-            print("Getting utxos from ogmios")
-            return await self.kupo_context.utxos_kupo(str(address))
-
-    async def get_reference_script_utxo(
-        self,
-        oracle_addr: Address,
-        reference_script_input: TransactionInput,
-        oracle_script_hash: ScriptHash,
-    ) -> UTxO:
-        """function to get reference script utxo
-        Args:
-            oracle_addr (Address): oracle address
-            reference_script_input (TransactionInput): reference script input
-            oracle_script_hash (ScriptHash): oracle script hash
-
-        Returns:
-            UTxO: utxo with plutus script
-        """
-        utxos = await self.get_utxos(oracle_addr)
-        if len(utxos) > 0:
-            for utxo in utxos:
-                if utxo.input == reference_script_input:
-                    if isinstance(self.context, BlockFrostChainContext):
-                        script = await self.get_plutus_script(oracle_script_hash)
-                        utxo.output.script = script
-                    return utxo
-
-    async def get_plutus_script(self, scripthash: ScriptHash) -> PlutusV2Script:
-        """
-        function to get plutus script and verify it's script hash
-
-        Args:
-            scripthash (ScriptHash): script hash of plutus script
-
-        Returns:
-            PlutusV2Script: plutus script if script hash matches else None
-
-        """
-        if isinstance(self.context, BlockFrostChainContext):
-            plutus_script = self.context._get_script(str(scripthash))
-            if plutus_script_hash(plutus_script) != scripthash:
-                plutus_script = PlutusV2Script(cbor2.dumps(plutus_script))
-            if plutus_script_hash(plutus_script) == scripthash:
-                return plutus_script
-
-            print("script hash mismatch")
-
-        if isinstance(self.context, OgmiosV6ChainContext):
-            print("ogmios context does not support get_script")
-            return None
-
-    async def submit_tx_builder(
-        self,
-        builder: TransactionBuilder,
-        signing_key: Union[PaymentSigningKey, ExtendedSigningKey],
-        address: Address,
-        user_defined_expense: int = 0,
-    ) -> Tuple[str, Transaction]:
-        """adds collateral and signers to tx, sign and submit tx.
-
-        Args:
-            builder (TransactionBuilder): transaction builder
-            signing_key (Union[PaymentSigningKey, ExtendedSigningKey]):
-        signing key
-            address (Address): address belonging to signing_key, used for
-        balancing, collateral and change
-            user_defined_fee: When not equal to 0, a UTxO with the specified
-        ADA amount is searched for to cover blockchain fees.
-
-        Returns:
-            Tuple[str, Transaction]: The status of the transaction and the
-            transaction object.
-        """
-        # The minimum suggested amount is 15 ADA for the Aggregate transaction,
-        # but ~1.3 ADA is commonly used for covering fees.
-        # The aggregate tx is considered the most costly transaction.
-
-        if user_defined_expense > 0:
-            builder = await self.process_common_inputs(
-                builder, address, signing_key, user_defined_expense
+        if not blockfrost_context and not kupo_ogmios_context:
+            raise ChainContextError(
+                "Must provide either Blockfrost or Kupo/Ogmios context"
             )
-        else:
-            builder = await self.process_common_inputs(builder, address, signing_key)
 
-        signed_tx = builder.build_and_sign(
-            [signing_key],
-            change_address=address,
-            auto_validity_start_offset=0,
-            auto_ttl_offset=120,
+        self.blockfrost = blockfrost_context
+        self.ogmios = kupo_ogmios_context
+        self.context = blockfrost_context or kupo_ogmios_context
+        self.config = config or ChainQueryConfig()
+        network_type = (
+            NetworkType.PREPROD
+            if self.ogmios.network.to_primitive() == 0
+            else NetworkType.MAINNET
         )
+        self.network_config = NetworkConfig.from_network(network_type)
+
+        # Initialize network config if not provided
+        if not self.config.network_config:
+            try:
+                network_type = get_network_type(self.genesis_params.network_magic)
+                self.config.network_config = NetworkConfig.from_network(network_type)
+            except Exception as e:
+                raise NetworkConfigError(
+                    f"Failed to initialize network config: {e}"
+                ) from e
+
+    async def _refresh_utxos(self, addresses: list[str | Address]) -> None:
+        """Refresh UTxO cache for given addresses after waiting for chain update."""
+        # Wait for chain to update
+        await asyncio.sleep(self.config.utxo_refresh_delay)
+
+        # Clear cache
+        self._invalidate_cache_for_addresses(addresses)
+
+        # Force refresh by querying UTxOs
+        for address in addresses:
+            try:
+                _ = await self.get_utxos(address)
+            except UTxOQueryError:
+                logger.warning("Failed to refresh UTxOs for address: %s", address)
+
+    def _invalidate_cache_for_addresses(self, addresses: list[str | Address]) -> None:
+        """Invalidate Kupo cache for given addresses."""
+        if isinstance(self.context, KupoChainContextExtension):
+            for address in addresses:
+                addr_str = str(address)
+                addr_key = f"address_{addr_str}"
+                if addr_key in self.context._utxo_cache:
+                    del self.context._utxo_cache[addr_key]
+
+    @property
+    def genesis_params(self) -> GenesisParameters:
+        """Get genesis parameters for the network."""
+        if not self.context:
+            raise ChainContextError("No chain context available")
+        return self.context.genesis_param
+
+    @property
+    def last_block_slot(self) -> int:
+        """Get latest block slot number."""
+        if not self.context:
+            raise ChainContextError("No chain context available")
+        return self.context.last_block_slot
+
+    def get_current_posix_chain_time_ms(self) -> int:
+        """Get current chain time in milliseconds.
+
+        Uses either wall clock or network time based on configuration.
+        """
+        if self.config.use_wall_clock:
+            return round(time.time_ns() * 1e-6)
+
+        slot = self.last_block_slot
+        return self.config.network_config.slot_to_posix(slot)
+
+    async def get_plutus_script(self, script_hash: ScriptHash) -> PlutusV3Script | None:
+        """Get Plutus script by hash.
+
+        Args:
+            script_hash: Script hash to query
+
+        Returns:
+            PlutusV3Script
+
+        Raises:
+            ScriptQueryError: If script cannot be found or retrieved
+        """
+        try:
+            if isinstance(self.context, BlockFrostChainContext):
+                script = self.context._get_script(str(script_hash))
+            else:
+                kupo_script_url = f"{self.context._kupo_url}/scripts/{script_hash}"
+                script = await asyncio.to_thread(
+                    lambda: requests.get(kupo_script_url, timeout=(5, 15)).json()
+                )
+                if script["language"] == "plutus:v3":
+                    script = PlutusV3Script(bytes.fromhex(script["script"]))
+            if not script:
+                raise ScriptQueryError(f"Script not found for hash: {script_hash}")
+
+            return script
+
+        except Exception as e:
+            raise ScriptQueryError(f"Failed to get script: {e}") from e
+
+    async def get_utxos(self, address: str | Address) -> list[UTxO]:
+        """Get UTxOs at an address.
+
+        Args:
+            address: Target address
+
+        Returns:
+            List of UTxOs
+
+        Raises:
+            UTxOQueryError: If UTxO query fails
+        """
+        if not self.context:
+            raise ChainContextError("No chain context available")
 
         try:
-            return await self.submit_tx_with_print(signed_tx)
-        except Exception as err:
-            print(f"Error submitting transaction: {str(err)}")
-            return "collateral error", signed_tx
-        except (InsufficientUTxOBalanceException, UTxOSelectionException) as exc:
-            print(f"Insufficient Funds in the wallet. {str(exc)}")
-            return "insufficient funds", signed_tx
-        except Exception as err:
-            print("Error submitting transaction: {str(err)}")
-            return "error", signed_tx
+            if isinstance(address, str):
+                address = Address.from_primitive(address)
+            return self.context.utxos(str(address))
 
-    async def process_common_inputs(
-        self,
-        builder: TransactionBuilder,
-        address: Address,
-        signing_key: Union[PaymentSigningKey, ExtendedSigningKey],
-        user_defined_expenses: int = 0,
-    ) -> TransactionBuilder:
-        """process common inputs for transaction builder
+        except ApiError as e:
+            raise UTxOQueryError(f"Failed to query UTxOs: {e}") from e
+        except Exception as e:
+            raise UTxOQueryError(f"Unexpected error querying UTxOs: {e}") from e
+
+    def get_utxos_with_asset_from_kupo(
+        self, asset_policy_id: ScriptHash, asset_name: AssetName
+    ) -> list[UTxO]:
+        """Get UTxOs containing some asset using kupo.
 
         Args:
-            builder (TransactionBuilder): transaction builder
-            address (Address): address belonging to signing_key, used for balancing, collateral and change
-            signing_key (Union[PaymentSigningKey, ExtendedSigningKey]): signing key
-            user_defined_expenses (int): Quantity to cover transaction fees and collateral
-        (Default is 0 if not provided, as it will automatically obtain input UTxOs.)
+            asset_policy_id (ScriptHash): Policy ID - asset minting script hash.
+            asset_name (AssetName): asset name.
 
         Returns:
-            TransactionBuilder: transaction builder
+            List of UTxOs
+
+        Raises:
+            ChainContextError: Kupo context was not set up
+            UTxOQueryError: If UTxO query fails
         """
+        if not self.context:
+            raise ChainContextError("No chain context available")
+        if not isinstance(self.context, KupoChainContextExtension):
+            raise ChainContextError("Kupo context was not set up")
 
-        # Add input address for tx balancing,
-        if user_defined_expenses != 0:
-            # Include an input UTXO that exclusively contains ADA (tx fees).
-            utxo_for_tx_fees = await self.utxo_for_tx_fees(
-                address, signing_key, user_defined_expenses
-            )
-            builder.add_input(utxo_for_tx_fees)
-            builder.required_signers = [address.payment_part]
-            return builder
-        else:
-            # this could include any address utxos and spend them for tx fees
-            builder.add_input_address(address)
+        try:
+            return self.context._utxos_with_asset_kupo(asset_policy_id, asset_name)
 
-            # Fresh output for convenience of using for collateral in future
-            # **NOTE** This value should align with the user_defined_expenses in the
-            # aggregation transaction, as the node executes the aggregation, so the
-            # value should cover both collateral and transaction fees.
-            # Under normal circumstances, the node updates its value and creates
-            # the output  for covering the aggregation, taking advantage of its
-            # low memory consumption.
-            builder.add_output(TransactionOutput(address, 30000000))
-
-            non_nft_utxo = await self.get_or_create_collateral(address, signing_key)
-
-            if non_nft_utxo is not None:
-                builder.collaterals.append(non_nft_utxo)
-                builder.required_signers = [address.payment_part]
-
-                return builder
-
-        raise Exception("Unable to find or create collateral.")
+        except ApiError as e:
+            raise UTxOQueryError(f"Failed to query UTxOs: {e}") from e
+        except Exception as e:
+            raise UTxOQueryError(f"Unexpected error querying UTxOs: {e}") from e
 
     async def get_or_create_collateral(
         self,
         address: Address,
-        signing_key: Union[PaymentSigningKey, ExtendedSigningKey],
-        collateral_amount: int = 30000000,
-    ) -> UTxO:
-        """get or create collateral
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        amount: int | None = None,
+    ) -> UTxO | None:
+        """Get existing collateral or create new one.
+
         Args:
-            address (Address): address belonging to signing_key, used for balancing, collateral and change
-            signing_key (Union[PaymentSigningKey, ExtendedSigningKey]): signing key
+            address: Address for collateral
+            signing_key: Signing key for new collateral
+            amount: Optional specific amount
+
         Returns:
-            UTxO: utxo
+            Collateral UTxO if found/created
+
+        Raises:
+            CollateralError: If collateral cannot be obtained
         """
-        non_nft_utxo = await self.find_collateral(address, collateral_amount)
+        amount = amount or self.config.min_collateral
 
-        if non_nft_utxo is None:
-            await self.create_collateral(address, signing_key, collateral_amount)
-            non_nft_utxo = await self.find_collateral(address, collateral_amount)
+        # Try find existing
+        collateral = await self.find_collateral(address, amount)
+        if collateral:
+            return collateral
 
-        return non_nft_utxo
+        # Create new
+        try:
+            logger.info(
+                "Creating collateral for address: %s, amount: %d", address, amount
+            )
+
+            await self.create_collateral(address, signing_key, amount)
+            # Refresh cache and try find again
+            await self._refresh_utxos([address])
+            return await self.find_collateral(address, amount)
+        except Exception as e:
+            raise CollateralError(f"Failed to create collateral: {e}") from e
 
     async def find_collateral(
-        self, target_address: Union[str, Address], required_amount: int
-    ) -> UTxO:
-        """
-        This method finds an UTxO  for the given address with the
-        following requirements:
-        - required_amount - 1 <= required_amunt < required_amount + 1.
-        - no multi asset
+        self, address: str | Address, required_amount: int
+    ) -> UTxO | None:
+        """Find suitable collateral UTxO at address.
+
         Args:
-            target_address (str, Address): The address to find the collateral for.
+            address: Address to search
+            required_amount: Required collateral amount in lovelace
 
         Returns:
-            UTxO: The  utxo covering the fees if found, None otherwise.
+            Suitable UTxO if found, None otherwise
 
-        Note: When used to locate the UTXO for covering expenses in the
-        aggregation transaction:
-        The aggregation transaction typically consumes approximately 1.3 ADA.
-        As we are consolidating collateral and transaction fees into a single UTxO,
-        we must ensure that the UTxO used contains at most the required ADA amount.
-        We limit the amount to a range of plus and minus 1 because when adding
-        collateral, we aim to avoid exposing ourselves to substantial
-        potential losses.
+        Raises:
+            UTxOQueryError: If UTxO query fails
         """
         try:
-            utxos = await self.get_utxos(address=target_address)
-            for utxo in utxos:
-                # A collateral should contain no multi asset
-                if not utxo.output.amount.multi_asset:
-                    if utxo.output.amount < (required_amount + 10000000):
-                        if utxo.output.amount.coin >= (required_amount - 1000000):
-                            return utxo
-        except ApiError as err:
-            if err.status_code == 404:
-                print("No utxos for tx fees found")
-                raise err
+            utxos = await self.get_utxos(address)
 
-            print(
-                "Requirements for tx fees couldn't be satisfied. need an utxo of >= 2 %s",
-                err,
+            return next(
+                (
+                    utxo
+                    for utxo in utxos
+                    if not utxo.output.amount.multi_asset
+                    and required_amount
+                    <= utxo.output.amount.coin
+                    <= required_amount + self.config.collateral_buffer
+                ),
+                None,
             )
+        except UTxOQueryError:
+            raise
+        except Exception as e:  # pylint: disable=broad-except
+            logger.warning("Error finding collateral: %s", e)
+
         return None
 
     async def create_collateral(
         self,
-        target_address: Union[str, Address],
-        skey: Union[PaymentSigningKey, ExtendedSigningKey],
-        required_amount: int,
+        address: str | Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        amount: int,
     ) -> None:
-        """
-        This method creates a collateral utxo for the given address with the following requirements:
-        - amount = 5000000 lovelaces
+        """Create new collateral UTxO.
 
         Args:
-            target_address (str, Address): The address to create the collateral for.
-            skey (PaymentSigningKey, ExtendedSigningKey): The signing key to sign the transaction.
-            required_amount: The required ADA amount in the UTxO.
+            address: Target address
+            signing_key: Signing key for transaction
+            amount: Collateral amount in lovelace
 
-        Returns:
-            None
+        Raises:
+            TransactionSubmissionError: If transaction fails
+            CollateralError: If amount is invalid
         """
-        print("creating collateral UTxO.")
-        collateral_builder = TransactionBuilder(self.context)
-
-        collateral_builder.add_input_address(target_address)
-        collateral_builder.add_output(
-            TransactionOutput(target_address, required_amount)
-        )
-
-        await self.submit_tx_with_print(
-            collateral_builder.build_and_sign(
-                [skey],
-                target_address,
-                auto_validity_start_offset=0,
-                auto_ttl_offset=120,
+        # Validate amount
+        if not self.config.min_collateral <= amount <= self.config.max_collateral:
+            raise CollateralError(
+                f"Collateral amount {amount} outside valid range "
+                f"({self.config.min_collateral}-{self.config.max_collateral})"
             )
+
+        try:
+            if isinstance(address, str):
+                address = Address.from_primitive(address)
+
+            # Build and submit transaction
+            builder = TransactionBuilder(self.context)
+            builder.add_input_address(address)
+            builder.add_output(TransactionOutput(address, amount))
+
+            signed_tx = builder.build_and_sign(
+                [signing_key],
+                change_address=address,
+            )
+
+            status, _ = await self.submit_tx(signed_tx)
+            if status != "confirmed":
+                raise TransactionSubmissionError(
+                    f"Collateral creation failed with status: {status}"
+                )
+
+            # Refresh UTxO cache after collateral creation
+            await self._refresh_utxos([address])
+
+        except Exception as e:
+            raise CollateralError(f"Failed to create collateral: {e}") from e
+
+    async def submit_tx(
+        self, tx: Transaction, wait_confirmation: bool = True
+    ) -> tuple[str, Transaction | None]:
+        """Submit transaction and optionally wait for confirmation.
+
+        Args:
+            tx: Transaction to submit
+            wait_confirmation: Whether to wait for confirmation
+
+        Returns:
+            Tuple of (status, transaction)
+
+        Raises:
+            TransactionSubmissionError: If submission fails
+        """
+        if not self.context:
+            raise ChainContextError("No chain context available")
+
+        try:
+            status = "submitting"
+            logger.info("Submitting transaction: %s", tx.id)
+
+            # Submit
+            if self.blockfrost:
+                self.blockfrost.submit_tx(tx.to_cbor())
+            else:
+                self.ogmios.submit_tx(tx.to_cbor())
+
+            status = "submitted"
+
+            # Clear cache for affected addresses
+            addresses = [output.address for output in tx.transaction_body.outputs]
+            self._invalidate_cache_for_addresses(addresses)
+
+            if not wait_confirmation:
+                return status, tx
+
+            # Wait for confirmation
+            status, confirmed_tx = await self._wait_for_confirmation(tx.id)
+            if status == "confirmed":
+                logger.info("Transaction confirmed: %s", tx.id)
+            elif status == "timeout":
+                logger.warning("Transaction confirmation timeout: %s", tx.id)
+
+            return status, confirmed_tx
+
+        except Exception as e:
+            status = "failed"
+            logger.error("Transaction submission failed: %s", e)
+            raise TransactionSubmissionError(f"{status}: {e}") from e
+
+    async def _wait_for_confirmation(
+        self, tx_id: TransactionId, timeout: int | None = None
+    ) -> tuple[str, Transaction | None]:
+        """Wait for transaction confirmation with timeout and retries.
+
+        Args:
+            tx_id: Transaction ID to monitor
+            timeout: Optional custom timeout in seconds
+
+        Returns:
+            Tuple of (status, transaction)
+
+        Raises:
+            TransactionConfirmationError: If confirmation fails
+        """
+        timeout = timeout or self.config.submission_timeout
+        retries = 0
+        tx_id = str(tx_id)
+
+        async def check_blockfrost(tx_id: TransactionId) -> Transaction | None:
+            """Check transaction status using Blockfrost."""
+            try:
+                return self.blockfrost.api.transaction(tx_id)
+            except ApiError as e:
+                if (
+                    e.status_code != NotFoundErrorCode
+                ):  # 404 just means not confirmed yet
+                    raise TransactionConfirmationError(
+                        f"Error checking transaction: {e}"
+                    ) from e
+                return None
+
+        async def check_ogmios(tx_id: TransactionId) -> Transaction | None:
+            """Check transaction status using Ogmios."""
+            try:
+                # Use UTxO query as a proxy for transaction confirmation
+                response = self.context._wrapped_backend._query_utxos_by_tx_id(tx_id, 0)
+                return response if response != [] else None
+            except Exception as e:
+                raise TransactionConfirmationError(
+                    f"Error checking transaction: {e}"
+                ) from e
+
+        # Select appropriate check function
+        check_fn = (
+            check_blockfrost
+            if isinstance(self.context, BlockFrostChainContext)
+            else check_ogmios
         )
 
-    async def submit_tx_with_print(self, tx: Transaction) -> Tuple[str, Transaction]:
-        """
-        This method submits a transaction to the chain and prints the transaction ID.
+        while retries < self.config.max_retries:
+            try:
+                tx = await check_fn(tx_id)
+                if tx:
+                    logger.info("Transaction confirmed: %s", tx_id)
+                    return "confirmed", tx
+
+            except TransactionConfirmationError:
+                raise
+
+            await asyncio.sleep(self.config.retry_delay)
+            retries += 1
+            logger.info(
+                "Waiting for confirmation (attempt %d/%d)",
+                retries,
+                self.config.max_retries,
+            )
+
+        return "timeout", None
+
+    async def submit_tx_builder(
+        self,
+        builder: TransactionBuilder,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        address: Address,
+        collateral_amount: int | None = None,
+    ) -> tuple[str, Transaction]:
+        """Build, sign and submit a transaction.
 
         Args:
-            tx: The transaction to submit.
+            builder: Transaction builder
+            signing_key: Signing key
+            address: Address for change/collateral
+            collateral_amount: Optional specific collateral amount
 
         Returns:
-            Tuple[str, Transaction]: The status of the transaction and the transaction object.
+            Tuple of (status, transaction)
+
+        Raises:
+            CollateralError: If collateral handling fails
+            TransactionSubmissionError: If submission fails
         """
-        print(f"Submitting transaction: {str(tx.id)}")
-        print(f"tx: {tx}")
-
-        if self.ogmios_context is not None:
-            print("Submitting tx with ogmios")
-            self.ogmios_context.submit_tx(tx.to_cbor())
-        elif self.blockfrost_context is not None:
-            print("Submitting tx with blockfrost")
-            self.blockfrost_context.submit_tx(tx.to_cbor())
-
-        status, _ = await self.wait_for_tx(str(tx.id))
-        return status, tx
-
-    async def wait_for_tx(
-        self, tx_id: TransactionId
-    ) -> Tuple[str, Optional[Transaction]]:
-        """
-        Waits for a transaction with the given ID to be confirmed.
-        Retries the API call every 20 seconds if the transaction is not found.
-        Stops retrying after a certain number of attempts.
-
-        Args:
-            tx_id (TransactionId): The transaction ID to wait for.
-
-        Returns:
-            Tuple[str, Optional[Transaction]]: The status of the transaction and
-            the transaction object if found, None otherwise.
-        """
-
-        async def _wait_for_tx(
-            context: Union[BlockFrostChainContext, OgmiosV6ChainContext],
-            tx_id: TransactionId,
-            check_fn: callable,
-            retries: int = 0,
-            max_retries: int = 10,
-        ) -> Tuple[str, Optional[Transaction]]:
-            """Wait for a transaction to be confirmed.
-
-            Args:
-                context (Union[BlockFrostChainContext, OgmiosV6ChainContext]): The chain context to use. # pylint: disable=line-too-long
-                tx_id (TransactionId): The transaction ID to wait for.
-                check_fn (callable): The function to use to check if the transaction is confirmed.
-                retries (int, optional): The number of retries. Defaults to 0.
-                max_retries (int, optional): The maximum number of retries. Defaults to 10.
-
-            Returns:
-                The transaction object if found, None otherwise.
-            """
-            status = "initiated"
-            transaction = None
-            while retries < max_retries:
-                try:
-                    transaction = await check_fn(context, tx_id)
-                    if transaction:
-                        print(f"Transaction submitted with tx_id: {str(tx_id)}")
-                        status = "success"
-                        return status, transaction
-
-                except ApiError as err:
-                    if err.status_code == 404:
-                        pass
-                    else:
-                        status = "error: " + str(err)
-                        return status, None
-
-                except Exception as err:
-                    status = "error: " + str(err)
-                    return status, None
-
-                wait_time = 20
-                print(
-                    f"Waiting for transaction confirmation: {str(tx_id)}. Retrying in {wait_time} seconds",
+        try:
+            # Get collateral
+            if collateral_amount:
+                collateral = await self.get_or_create_collateral(
+                    address, signing_key, collateral_amount
                 )
-                retries += 1
-                await asyncio.sleep(wait_time)
+                if collateral:
+                    builder.collaterals.append(collateral)
+                    builder.required_signers = [address.payment_part]
+                else:
+                    raise CollateralError("Failed to get collateral")
 
-            print(f"Transaction not found after {max_retries} retries. Giving up.")
-            return status, transaction
+            # Add input address for fees/balancing
+            builder.add_input_address(address)
 
-        async def check_blockfrost(
-            context: BlockFrostChainContext, tx_id: TransactionId
-        ) -> Transaction:
-            """
-            Check if the transaction is confirmed using the blockfrost API.
+            # Build and sign transaction
+            signed_tx = builder.build_and_sign(
+                [signing_key],
+                change_address=address,
+                validity_start=self.config.validity_start_offset,
+                ttl=self.config.ttl_offset,
+            )
 
-            Args:
-                context (BlockFrostChainContext): The chain context to use.
-                tx_id (TransactionId): The transaction ID to wait for.
+            # Submit and wait for confirmation
+            status, tx = await self.submit_tx(signed_tx)
+            if status not in ["confirmed", "submitted"]:
+                raise TransactionSubmissionError(
+                    f"Transaction failed with status: {status}"
+                )
 
-            Returns:
-                The transaction object if found, None otherwise.
-            """
-            return context.api.transaction(tx_id)
+            return status, tx
 
-        async def check_ogmios(
-            context: OgmiosV6ChainContext, tx_id: TransactionId
-        ) -> Transaction:
-            """
-            Check if the transaction is confirmed using the ogmios API.
+        except Exception as e:
+            raise TransactionSubmissionError(f"Transaction failed: {e}") from e
 
-            Args:
-                context (OgmiosV6ChainContext): The chain context to use.
-                tx_id (TransactionId): The transaction ID to wait for.
+    async def get_native_script(self, script_hash: ScriptHash) -> NativeScript | None:
+        """Get native script by hash."""
+        try:
+            if isinstance(self.context, BlockFrostChainContext):
+                script = self.context._get_script(str(script_hash))
+            else:
+                kupo_script_url = f"{self.context._kupo_url}/scripts/{script_hash}"
+                script_json = await asyncio.to_thread(
+                    lambda: requests.get(kupo_script_url, timeout=(5, 15)).json()
+                )
+                script = NativeScript.from_cbor(script_json["script"])
+            if not script:
+                raise ScriptQueryError(f"Script not found for hash: {script_hash}")
 
-            Returns:
-                The transaction object if found, None otherwise.
-            """
-            response = context._query_utxos_by_tx_id(tx_id, 0)
-            return response if response != [] else None
+            return script
 
-        if self.ogmios_context:
-            return await _wait_for_tx(self.ogmios_context, tx_id, check_ogmios)
-        if self.blockfrost_context:
-            return await _wait_for_tx(self.blockfrost_context, tx_id, check_blockfrost)
+        except Exception as e:
+            raise ScriptQueryError(f"Failed to get script: {e}") from e
+
+    def calculate_validity_window(
+        self, time_absolute_uncertainty: int
+    ) -> ValidityWindow:
+        """Calculate transaction validity window and current time."""
+        validity_start = self.get_current_posix_chain_time_ms()
+        validity_end = validity_start + time_absolute_uncertainty
+        current_time = (validity_end + validity_start) // 2
+        return ValidityWindow(validity_start, validity_end, current_time)
+
+    def _validity_window_to_slot(
+        self, validity_start: int, validity_end: int
+    ) -> tuple[int, int]:
+        """Convert validity window to slot numbers."""
+        validity_start_slot = self.network_config.posix_to_slot(validity_start)
+        validity_end_slot = self.network_config.posix_to_slot(validity_end)
+        return validity_start_slot, validity_end_slot

@@ -1,530 +1,252 @@
-import argparse
 import asyncio
 import os
 import sys
+from pathlib import Path
 
 import cbor2
-import yaml
-from pycardano import (
-    Address,
-    Asset,
-    AssetName,
-    BlockFrostChainContext,
-    ExtendedSigningKey,
-    HDWallet,
-    MultiAsset,
-    Network,
-    OgmiosV6ChainContext,
-    PaymentSigningKey,
-    PaymentVerificationKey,
-    PlutusV2Script,
-    ScriptHash,
-    TransactionId,
-    TransactionInput,
-)
+import click
+from pycardano import Network, PlutusV2Script, TransactionId, TransactionInput
 
-from swap_demo_contract.lib.chain_query import ChainQuery
-from swap_demo_contract.lib.kupo import KupoContext
+from swap_demo_contract.client.format import (
+    print_aggregate_summary,
+    print_collection_stats,
+    print_header,
+    print_information,
+    print_node_messages,
+    print_progress,
+    print_send_summary,
+    print_signature_status,
+    print_status,
+)
+from swap_demo_contract.client.odv import (
+    ODVClient,
+    OdvTxSignatureRequest,
+    build_aggregate_message,
+)
+from swap_demo_contract.lib.builder import build_odv_tx
+from swap_demo_contract.lib.common import get_oracle_exchange_rate
+from swap_demo_contract.lib.exceptions import TransactionError
+from swap_demo_contract.lib.transaction import TransactionManager
+from swap_demo_contract.utils.load_configuration import (
+    EnvironmentConfig,
+    OdvClientConfig,
+    SwapConfig,
+    WalletConfig,
+)
+from swap_demo_contract.utils.parser import create_parser
 
 from .lib.oracle_user import OracleUser
 from .mint import Mint
-from .swap import Swap, SwapContract
-
-
-def load_contracts_addresses(configyaml):
-    """Loads the contract addresses"""
-
-    # Fetch necessary config values
-    minting_policy = configyaml.get("dynamic_payment_oracle_minting_policy")
-    asset_name = configyaml.get("dynamic_payment_oracle_asset_name")
-    oracle_rate_address = configyaml.get("dynamic_payment_oracle_addr")
-    oracle_contract_address = configyaml.get("oracle_contract_address")
-    swap_contract_address = configyaml.get("swap_contract_address")
-
-    # Convert minting policy to ScriptHash if available
-    oracle_rate_nft_hash = (
-        ScriptHash.from_primitive(minting_policy) if minting_policy else None
-    )
-
-    if oracle_rate_nft_hash and asset_name and oracle_rate_address:
-        return (
-            Address.from_primitive(oracle_contract_address),
-            Address.from_primitive(swap_contract_address),
-            Address.from_primitive(oracle_rate_address),
-            create_c3_oracle_rate_nft(oracle_rate_nft_hash, asset_name),
-        )
-    else:
-        return (
-            Address.from_primitive(oracle_contract_address),
-            Address.from_primitive(swap_contract_address),
-            None,
-            None,
-        )
-
-
-def create_c3_oracle_rate_nft(minting_policy, token_name) -> MultiAsset | None:
-    """Create C3 oracle rate NFT."""
-    if token_name and minting_policy:
-        return MultiAsset.from_primitive(
-            {minting_policy.payload: {token_name.encode(): 1}}
-        )
-    else:
-        return None
-
-
-def load_swap_config_tokens(configyaml):
-    swap_minting_policy = ScriptHash.from_primitive(
-        configyaml.get("swap_minting_policy")
-    )
-    swap_asset_name = AssetName(configyaml.get("swap_asset_name").encode())
-    swap_nft = MultiAsset({swap_minting_policy: Asset({swap_asset_name: 1})})
-
-    token_a_minting_policy = ScriptHash.from_primitive(
-        configyaml.get("token_a_minting_policy")
-    )
-    token_a_asset_name = AssetName(configyaml.get("token_a_asset_name").encode())
-    token_a = MultiAsset({token_a_minting_policy: Asset({token_a_asset_name: 1})})
-    return (swap_nft, token_a)
-
-
-def load_odv_oracle_config_tokens(configyaml):
-    aggstate_minting_policy = ScriptHash.from_primitive(
-        configyaml.get("aggstate_minting_policy")
-    )
-    aggstate_asset_name = AssetName(configyaml.get("aggstate_asset_name").encode())
-    aggstate_nft = MultiAsset(
-        {aggstate_minting_policy: Asset({aggstate_asset_name: 1})}
-    )
-
-    oracle_nft_minting_policy = ScriptHash.from_primitive(
-        configyaml.get("oracle_nft_minting_policy")
-    )
-    oracle_nft_asset_name = AssetName(configyaml.get("oracle_nft_asset_name").encode())
-    oracle_nft = MultiAsset(
-        {oracle_nft_minting_policy: Asset({oracle_nft_asset_name: 1})}
-    )
-
-    c3_token_hash = ScriptHash.from_primitive(configyaml.get("c3_token_hash"))
-
-    c3_token_name = AssetName(configyaml.get("c3_token_name").encode())
-
-    return (aggstate_nft, oracle_nft, c3_token_hash, c3_token_name)
-
-
-def load_config():
-    """Loads the YAML configuration file."""
-    try:
-        with open("config.yaml", "r", encoding="UTF-8") as config_yaml:
-            return yaml.load(config_yaml, Loader=yaml.FullLoader)
-    except FileNotFoundError:
-        print("Configuration file not found.")
-        sys.exit(1)
-
-
-def validate_config(config, connection, required_keys):
-    """Validates that all required keys exist for a connection configuration."""
-    if connection not in config or not all(
-        key in config[connection] for key in required_keys
-    ):
-        raise ValueError(f"Context for {connection} not found or is incomplete.")
-
-
-def context(args) -> ChainQuery:
-    """Connection context"""
-    blockfrost_context = None
-    ogmios_context = None
-    kupo_context = None
-
-    configyaml = load_config()
-
-    if args.environment == "mainnet":
-        network = Network.MAINNET
-    elif args.environment == "preprod":
-        network = Network.TESTNET
-    else:
-        network = None
-
-    if args.connection == "blockfrost":
-        required_keys = ["project_id"]
-        validate_config(configyaml, args.connection, required_keys)
-
-        blockfrost_context = BlockFrostChainContext(
-            project_id=configyaml[args.connection].get("project_id", ""),
-            base_url=None,
-        )
-    elif args.connection == "ogmios":
-        required_keys = ["kupo_url", "ws_url"]
-        validate_config(configyaml, args.connection, required_keys)
-
-        ogmios_ws_url = configyaml["ogmios"]["ws_url"]
-        kupo_url = configyaml["ogmios"]["kupo_url"]
-
-        _, ws_string = ogmios_ws_url.split("ws://")
-        ws_url, port = ws_string.split(":")
-        ogmios_context = OgmiosV6ChainContext(
-            host=ws_url, port=int(port), network=network
-        )
-
-        kupo_context = KupoContext(kupo_url)
-
-    return ChainQuery(
-        blockfrost_context=blockfrost_context,
-        ogmios_context=ogmios_context,
-        kupo_context=kupo_context,
-    )
-
-
-def user_wallet_extended_signing_key(configyaml) -> PaymentSigningKey:
-    mnemonic_24 = configyaml.get("MNEMONIC_24")
-    hdwallet = HDWallet.from_mnemonic(mnemonic_24)
-    hdwallet_spend = hdwallet.derive_from_path("m/1852'/1815'/0'/0/0")
-
-    extended_signing_key = ExtendedSigningKey.from_hdwallet(hdwallet_spend)
-    return extended_signing_key
-
-
-def user_wallet_credentials(configyaml) -> Address:
-    mnemonic_24 = configyaml.get("MNEMONIC_24")
-    hdwallet = HDWallet.from_mnemonic(mnemonic_24)
-    hdwallet_spend = hdwallet.derive_from_path("m/1852'/1815'/0'/0/0")
-    spend_public_key = hdwallet_spend.public_key
-    spend_vk = PaymentVerificationKey.from_primitive(spend_public_key)
-
-    hdwallet_stake = hdwallet.derive_from_path("m/1852'/1815'/0'/2/0")
-    stake_public_key = hdwallet_stake.public_key
-    stake_vk = PaymentVerificationKey.from_primitive(stake_public_key)
-
-    return spend_vk, stake_vk
-
-
-def user_wallet_address(configyaml, args):
-    if args.environment == "mainnet":
-        network = Network.MAINNET
-    elif args.environment == "preprod":
-        network = Network.TESTNET
-    else:
-        network = None
-
-    mnemonic_24 = configyaml.get("MNEMONIC_24")
-    hdwallet = HDWallet.from_mnemonic(mnemonic_24)
-    hdwallet_spend = hdwallet.derive_from_path("m/1852'/1815'/0'/0/0")
-    spend_public_key = hdwallet_spend.public_key
-    spend_vk = PaymentVerificationKey.from_primitive(spend_public_key)
-
-    hdwallet_stake = hdwallet.derive_from_path("m/1852'/1815'/0'/2/0")
-    stake_public_key = hdwallet_stake.public_key
-    stake_vk = PaymentVerificationKey.from_primitive(stake_public_key)
-
-    str_address = Address(spend_vk.hash(), stake_vk.hash(), network=network).encode()
-    return Address.from_primitive(str_address)
-
-
-def create_parser():
-    parser = argparse.ArgumentParser(
-        prog="python main.py",
-        description="The swap python script is a demonstrative smart contract "
-        "(Plutus v2) featuring the interaction with a Charli3's oracle. This "
-        "script uses the inline oracle feed as reference input simulating the "
-        "exchange rate between tADA and tUSDT to sell or buy assets from a swap "
-        "contract in the test environment of preproduction. ",
-        epilog="Copyrigth: (c) 2020 - 2024 Charli3",
-    )
-
-    # Service to connect to the blockchain
-    parser.add_argument(
-        "connection",
-        choices=["blockfrost", "ogmios"],
-        nargs="?",
-        default="blockfrost",
-        help="External service to read blockhain information",
-    )
-
-    # Service to connect to the blockchain
-    parser.add_argument(
-        "environment",
-        choices=["preprod", "mainnet"],
-        nargs="?",
-        default="preprod",
-        help="Blockchain environment",
-    )
-
-    # Create a subparser for each main choice
-    subparser = parser.add_subparsers(dest="subparser")
-
-    # Create a parser for the "trade" choice
-    trade_subparser = subparser.add_parser(
-        "trade",
-        help="Call the trade transaction to exchange a user asset with another "
-        "asset at the swap contract. Supported assets tADA and tUSDT.",
-        description="Trade transaction to sell and buy tUSDT or tADA.",
-    )
-
-    # Create a subparser for each trade option
-    subparser_trade_subparser = trade_subparser.add_subparsers(
-        dest="subparser_trade_subparser"
-    )
-
-    tada_subparser_trade_subparser = subparser_trade_subparser.add_parser(
-        "tADA", help="Toy ADA asset."
-    )
-    tada_subparser_trade_subparser.add_argument(
-        "--amount",
-        type=int,
-        default=0,
-        metavar="tLOVELACE",
-        help="Amount of lovelace to trade.",
-    )
-
-    tusdt_subparser_trade_subparser = subparser_trade_subparser.add_parser(
-        "tUSDT", help="Toy USDT asset."
-    )
-    tusdt_subparser_trade_subparser.add_argument(
-        "--amount",
-        type=int,
-        default=0,
-        metavar="tUSDT",
-        help="Amount of tUSDT to trade.",
-    )
-
-    # Create a parser for the "user" choice
-    user_parser = subparser.add_parser(
-        "user",
-        help="Obtain information about the wallet of the user who participate in "
-        "the trade transaction.",
-        description="User wallet information.",
-    )
-    user_parser.add_argument(
-        "--liquidity",
-        action="store_true",
-        help="Print the amount of availables assets.",
-    )
-
-    user_parser.add_argument(
-        "--address",
-        action="store_true",
-        help="Print the wallet address.",
-    )
-
-    # Create a parser for the "swap-contract" choice
-    swap_contract_parser = subparser.add_parser(
-        "swap-contract",
-        help="Obtain information about the SWAP smart contract.",
-        description="SWAP smart contract information.",
-    )
-    swap_contract_parser.add_argument(
-        "--liquidity",
-        action="store_true",
-        help="Print the amount of availables assets.",
-    )
-
-    swap_contract_parser.add_argument(
-        "--address",
-        action="store_true",
-        help="Print the swap contract address.",
-    )
-
-    swap_contract_parser.add_argument(
-        "--add-liquidity",
-        nargs=2,
-        action="store",
-        dest="addliquidity",
-        metavar=("tUSDT", "tADA"),
-        type=int,
-        help="Add asset liquidity at swap UTXO.",
-    )
-
-    swap_contract_parser.add_argument(
-        "--start-swap",
-        dest="soracle",
-        action="store_true",
-        help="Generate a UTXO and mint an NFT at the specified swap contract address.",
-    )
-
-    # Create a parser for the "oracle-contract" choice
-    oracle_contract_parser = subparser.add_parser(
-        "oracle-contract",
-        help="Obtain information about the ORACLE smart contract.",
-        description="ORACLE smart contract information.",
-    )
-    oracle_contract_parser.add_argument(
-        "--feed",
-        action="store_true",
-        help="Print the oracle feed (exchange rate) tUSDT/tADA.",
-    )
-
-    oracle_contract_parser.add_argument(
-        "--address",
-        action="store_true",
-        help="Print the oracle contract address.",
-    )
-
-    # Odv request
-    send_odv_request_parser = subparser.add_parser(
-        "send-odv-request",
-        help="Send a validation request on demand to ODV-Charli3 Oracle.",
-        description="Generate a request for information by prepaying the Charli3 oracles.",
-    )
-
-    send_odv_request_parser.add_argument(
-        "--funds-to-send",
-        type=int,
-        default=None,
-        dest="fundstosend",
-        help="Minimum C3 payment amount for the generation of an oracle-feed.",
-    )
-    return parser
+from .swap import SwapContract
 
 
 # Parser command-line arguments
-async def display(args, context):
-    configyaml = load_config()
+async def display(args):
+    path = Path("config.yaml")
+    odv = OdvClientConfig.from_yaml(path)
+    environment = EnvironmentConfig.from_yaml(path, args)
+    wallet = WalletConfig.from_yaml(path, args)
+    swap = SwapConfig.from_yaml(path)
 
-    # NFT configuration
-    (
-        oracle_address,
-        swap_address,
-        dynamic_payment_oracle_addr,
-        dynamic_payment_oracle_nft,
-    ) = load_contracts_addresses(configyaml)
-    swap_nft, token_a = load_swap_config_tokens(configyaml)
-    (
-        aggstate_nft,
-        oracle_nft,
-        c3_token_hash,
-        c3_token_name,
-    ) = load_odv_oracle_config_tokens(configyaml)
-
-    # Load user payment key from wallet file
-    extended_payment_skey = user_wallet_extended_signing_key(configyaml)
-    spend_vk, stake_vk = user_wallet_credentials(configyaml)
-
-    # User address wallet
-    user_address = user_wallet_address(configyaml, args)
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    swap_script_path = os.path.join(current_dir, "utils", "scripts", "swap.plutus")
-    with open(swap_script_path, "r") as f:
-        script_hex = f.read()
-        swap_script = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
-
-    swap = Swap(swap_nft, token_a)
-    swapInstance = SwapContract(context, oracle_nft, oracle_address, swap_address, swap)
+    swap_contract = SwapContract(environment.chain_query, odv, wallet, swap)
 
     if args.subparser == "trade" and args.subparser_trade_subparser == "tADA":
-        await swapInstance.swap_B(
-            args.amount,
-            user_address,
-            swap_address,
-            swap_script,
-            extended_payment_skey,
-        )
+        print("TODO")
+        # await swap_contract.swap_B(
+        #     args.amount,
+        #     user_address,
+        #     swap_address,
+        #     swap_script,
+        #     extended_payment_skey,
+        # )
 
     elif args.subparser == "trade" and args.subparser_trade_subparser == "tUSDT":
-        await swapInstance.swap_A(
-            args.amount,
-            user_address,
-            swap_address,
-            swap_script,
-            extended_payment_skey,
-        )
+        print("TODO")
+        # await swap_contract.swap_A(
+        #     args.amount,
+        #     user_address,
+        #     swap_address,
+        #     swap_script,
+        #     extended_payment_skey,
+        # )
 
     elif args.subparser == "user" and args.liquidity:
-        tlovelace = await swapInstance.available_user_tlovelace(user_address)
-        tUSDT = await swapInstance.available_user_tusdt(user_address)
-        print("User wallet's liquidity:")
-        print(f"- {tlovelace // 1000000} tADA ({tlovelace} tlovelace)")
-        print(f"- {tUSDT} tUSDT")
+        print("TODO")
+        # tlovelace = await swap_contract.available_user_tlovelace(user_address)
+        # tUSDT = await swap_contract.available_user_tusdt(user_address)
+        # print("User wallet's liquidity:")
+        # print(f"- {tlovelace // 1000000} tADA ({tlovelace} tlovelace)")
+        # print(f"- {tUSDT} tUSDT")
     elif args.subparser == "user" and args.address:
-        print(f"User's wallet address (Mnemonic): {user_address}")
+        print(f"User's wallet address (Mnemonic): {wallet.address}")
 
     elif args.subparser == "swap-contract" and args.liquidity:
-        swap_utxo = await swapInstance.get_swap_utxo()
-        tlovelace = swap_utxo.output.amount.coin
-        tUSDT = await swapInstance.add_asset_swap_amount(0)
-        print("Swap contract liquidity:")
-        print(f"- {tlovelace // 1000000} tADA ({tlovelace} tlovelace)")
-        print(f"- {tUSDT} tUSDT")
+        print("TODO")
+        # swap_utxo = await swap_contract.get_swap_utxo()
+        # tlovelace = swap_utxo.output.amount.coin
+        # tUSDT = await swap_contract.add_asset_swap_amount(0)
+        # print("Swap contract liquidity:")
+        # print(f"- {tlovelace // 1000000} tADA ({tlovelace} tlovelace)")
+        # print(f"- {tUSDT} tUSDT")
 
     elif args.subparser == "swap-contract" and args.address:
-        print(f"Swap contract's address: {swap_address}")
+        print(f"Swap contract's address: {swap.address}")
 
     elif args.subparser == "swap-contract" and args.addliquidity:
-        await swapInstance.add_liquidity(
-            args.addliquidity[0],
-            args.addliquidity[1],
-            user_address,
-            swap_address,
-            swap_script,
-            extended_payment_skey,
-        )
+        print("TODO")
+        # await swap_contract.add_liquidity(
+        #     args.addliquidity[0],
+        #     args.addliquidity[1],
+        #     user_address,
+        #     swap_address,
+        #     swap_script,
+        #     extended_payment_skey,
+        # )
     elif args.subparser == "swap-contract" and args.soracle:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        mint_script_path = os.path.join(
-            current_dir, "utils", "scripts", "mint_script.plutus"
-        )
-        with open(mint_script_path, "r") as f:
-            script_hex = f.read()
-            plutus_script_v2 = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
+        print("TODO")
+        # current_dir = os.path.dirname(os.path.abspath(__file__))
+        # mint_script_path = os.path.join(
+        #     current_dir, "utils", "scripts", "mint_script.plutus"
+        # )
+        # with open(mint_script_path, "r") as f:
+        #     script_hex = f.read()
+        #     plutus_script_v2 = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
 
-        swap_utxo_nft = Mint(
-            context, extended_payment_skey, user_address, swap_address, plutus_script_v2
-        )
-        await swap_utxo_nft.mint_nft_with_script()
+        # swap_utxo_nft = Mint(
+        #     context, extended_payment_skey, user_address, swap_address, plutus_script_v2
+        # )
+        # await swap_utxo_nft.mint_nft_with_script()
 
     elif args.subparser == "oracle-contract" and args.feed:
         try:
-            exchange = await swapInstance.get_oracle_exchange_rate()
+            feed_utxos = environment.chain_query.get_utxos_with_asset_from_kupo(
+                odv.policy_id, odv.nft_aggstate
+            )
+            exchange = await get_oracle_exchange_rate(feed_utxos)
 
-            print("Charli3 - Oracle Feed")
-            print(f"Last Price: {exchange / 1000000:.6f} tADA/tUSDt")
+            print("Oracle Feed")
+            print(f"Last Price: {exchange} BTC/USD")
 
         except Exception as e:
             return f"An error occurred while fetching the oracle feed: {e}"
 
     elif args.subparser == "oracle-contract" and args.address:
-        print(f"Oracle contract's address: {oracle_address}")
+        print(f"Oracle On-Demand-Validation (ODV) contract's address: \n{odv.address}")
 
     elif args.subparser == "send-odv-request":
-        load_script_input = configyaml.get("script_input_oracle")
-        tx_id_hex, index = load_script_input.split("#")
-        tx_id = TransactionId(bytes.fromhex(tx_id_hex))
-        index = int(index)
-        reference_script_input = TransactionInput(tx_id, index)
 
-        if args.environment == "mainnet":
-            network = Network.MAINNET
-        elif args.environment == "preprod":
-            network = Network.TESTNET
-        else:
-            network = None
+        try:
+            print_header("ODV Send Request")
+            print_progress("Loading configuration and initializing network connection")
+            odv_client = ODVClient()
 
-        oracle_user = OracleUser(
-            network,
-            context,
-            extended_payment_skey,
-            spend_vk,
-            stake_vk,
-            str(oracle_address),
-            aggstate_nft,
-            reference_script_input,
-            c3_token_hash,
-            c3_token_name,
-            dynamic_payment_oracle_addr,
-            dynamic_payment_oracle_nft,
-        )
-        if args.fundstosend:
-            await oracle_user.send_odv_request(args.fundstosend)
-        else:
-            funds_to_add = await oracle_user.calc_recommended_funds_amount()
-            print(f"Minimum quantity required {funds_to_add}")
-            await oracle_user.send_odv_request(funds_to_add)
+            validity_window = environment.chain_query.calculate_validity_window(
+                odv.odv_validity_length
+            )
+
+            print_progress("Initiating node feed collection process")
+            node_messages = await odv_client.collect_feed_updates(
+                nodes=odv.nodes,
+                policy_id=odv.policy_id,
+                validity_window=validity_window,
+            )
+            if not node_messages:
+                print_status(
+                    "Node Collection", "No valid responses received", success=False
+                )
+                raise click.ClickException("No valid node responses received")
+
+            print_collection_stats(
+                received=len(node_messages),
+                total=len(odv.nodes),
+                collection_type="feed responses",
+            )
+            print_node_messages(node_messages)
+
+            print_progress("Constructing ODV aggregate transaction")
+
+            aggregate_message = build_aggregate_message(
+                list(node_messages.values()), validity_window.current_time
+            )
+            print_aggregate_summary(aggregate_message, validity_window)
+
+            result = await build_odv_tx(
+                message=aggregate_message,
+                signing_key=wallet.esigning_key,
+                change_address=wallet.address,
+                validity_window=validity_window,
+                policy_id=odv.policy_id,
+                chain_query=environment.chain_query,
+                address=odv.address,
+                reward_token_hash=odv.payment_token_policy_id,
+                reward_token_name=odv.payment_token_asset_name,
+            )
+
+            print_information("Transaction Construction Complete")
+
+            print_progress("Initiating signature collection from oracle nodes")
+            tx_request = OdvTxSignatureRequest(
+                node_messages=node_messages,
+                tx_cbor=result.transaction.to_cbor_hex(),
+            )
+
+            signed_txs = await odv_client.collect_tx_signatures(
+                nodes=odv.nodes, tx_request=tx_request
+            )
+
+            print_collection_stats(
+                received=len(signed_txs),
+                total=len(odv.nodes),
+                collection_type="signatures",
+            )
+            print_signature_status(signed_txs)
+
+            if not signed_txs:
+                print_status(
+                    "Signature Collection",
+                    "No valid signatures received",
+                    success=False,
+                )
+                raise click.ClickException("No valid signatures received")
+
+            print_progress("Finalizing transaction with collected signatures")
+
+            odv_client.attach_tx_signatures(
+                transaction=result.transaction,
+                signed_txs=signed_txs,
+            )
+
+            print_progress("Initiating ODV transaction submission")
+            tx_manager = TransactionManager(environment.chain_query)
+            tx_status, _ = await tx_manager.sign_and_submit(
+                result.transaction, [wallet.esigning_key]
+            )
+
+            if tx_status == "confirmed":
+                print_send_summary(result)
+            else:
+                print_status(
+                    "Transaction Submission",
+                    f"Failed with status: {tx_status}",
+                    success=False,
+                )
+                raise click.ClickException(
+                    f"Transaction failed with status: {tx_status}"
+                )
+
+        except TransactionError as e:
+            print_status("Transaction Processing", str(e), success=False)
+            raise click.ClickException(str(e)) from e
+        except Exception as e:
+            print_status("ODV Process", str(e), success=False)
+            raise click.ClickException(str(e)) from e
 
 
 def main():
     """main execution program"""
     parser = create_parser()
     args = parser.parse_args(None if sys.argv[1:] else ["-h"])
-    ctx = context(args)
-    asyncio.run(display(args, ctx))
+    asyncio.run(display(args))
 
 
 if __name__ == "__main__":

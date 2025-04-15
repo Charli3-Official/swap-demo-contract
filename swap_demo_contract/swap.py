@@ -5,27 +5,13 @@ from datetime import datetime
 import pycardano as pyc
 
 from swap_demo_contract.lib.chain_query import ChainQuery
+from swap_demo_contract.utils.load_configuration import (
+    OdvClientConfig,
+    SwapConfig,
+    WalletConfig,
+)
 
-from .lib.datums import GenericData
 from .lib.redeemers import AddLiquidity, SwapA, SwapB
-
-
-class Swap:
-    """Class Swap for interact with the assets in the swap operation
-    and identify the Swap's NFTs
-
-    Attribures:
-        swap_nft: The NFT identifier of the swap utxo
-        coinA: Asset
-    """
-
-    def __init__(
-        self,
-        swap_nft: pyc.MultiAsset,
-        coinA: pyc.MultiAsset,
-    ) -> None:
-        self.swap_nft = swap_nft
-        self.coinA = coinA
 
 
 class SwapContract:
@@ -41,17 +27,15 @@ class SwapContract:
     def __init__(
         self,
         chain_query: ChainQuery,
-        oracle_nft: pyc.MultiAsset,
-        oracle_addr: pyc.Address,
-        swap_addr: pyc.Address,
-        swap: Swap,
+        odv_config: OdvClientConfig,
+        wallet_config: WalletConfig,
+        swap: SwapConfig,
     ) -> None:
         self.chain_query = chain_query
-        self.oracle_addr = oracle_addr
-        self.swap_addr = swap_addr
+        self.odv_config = odv_config
         self.coin_precision = 1000000
         self.swap = swap
-        self.oracle_nft = oracle_nft
+        self.wallet = wallet_config
 
     async def add_liquidity(
         self,
@@ -289,27 +273,6 @@ class SwapContract:
         """Convert epoch to humnan"""
         return datetime.utcfromtimestamp(timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
 
-    async def get_oracle_exchange_rate(self) -> int:
-        """
-        Get the oracle's feed exchange rate and return a tuple of the price and UTxO object.
-
-        Returns:
-            A tuple containing the exchange rate and the UTxO object, or None if not available.
-        """
-        price = 0
-        oracle_feed_utxo = await self.get_oracle_utxo()
-
-        if oracle_feed_utxo.output.datum and not isinstance(
-            oracle_feed_utxo.output.datum, GenericData
-        ):
-            if oracle_feed_utxo.output.datum.cbor:
-                oracle_inline_datum = GenericData.from_cbor(
-                    oracle_feed_utxo.output.datum.cbor
-                )
-                price = oracle_inline_datum.price_data.get_price()
-
-        return price
-
     async def get_oracle_timestamp(self) -> int:
         """Get the oracle's feed exchange rate"""
         oracle_feed_utxo = await self.get_oracle_utxo()
@@ -328,11 +291,11 @@ class SwapContract:
 
     async def get_oracle_utxo(self) -> pyc.UTxO:
         """Retrieve the oracle's feed UTXO using the NFT identifier."""
-        oracle_utxos = await self.chain_query.get_utxos(str(self.oracle_addr))
+        oracle_utxos = await self.chain_query.get_utxos(str(self.odv_config.address))
         oracle_utxo_nft = next(
             utxo
             for utxo in oracle_utxos
-            if utxo.output.amount.multi_asset == self.oracle_nft
+            if utxo.output.amount.multi_asset == self.odv_config.policy_id
         )
         return oracle_utxo_nft
 
