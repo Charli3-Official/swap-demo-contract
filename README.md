@@ -34,9 +34,21 @@
   <ol>
     <li>
       <a href="#about-the-project">About The Project</a>
+    </li>
+    <li>
+      <a href="#swap-contract-overview">Swap Contract Overview</a>
+    </li>
+    <li>
+      <a href="#odv-request-on-demand-validation">ODV Request (On Demand Validation)</a>
       <ul>
-        <li><a href="#built-with">Built With</a></li>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#technical-process">Technical Process</a></li>
+        <li><a href="#benefits">Benefits</a></li>
+        <li><a href="#integration">Integration</a></li>
       </ul>
+    </li>
+    <li>
+      <a href="#built-with">Built With</a>
     </li>
     <li>
       <a href="#getting-started">Getting Started</a>
@@ -45,139 +57,139 @@
         <li><a href="#installation">Installation</a></li>
       </ul>
     </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#license">License</a></li>
+    <li>
+      <a href="#usage">Usage</a>
+      <ul>
+        <li><a href="#common-examples">Common Examples</a>
+          <ul>
+            <li><a href="#fetch-latest-oracle-price">Fetch Latest Oracle Price</a></li>
+            <li><a href="#get-oracle-contract-address">Get Oracle Contract Address</a></li>
+            <li><a href="#check-user-wallet-liquidity">Check User Wallet Liquidity</a></li>
+            <li><a href="#monitor-swap-contract-liquidity">Monitor Swap Contract Liquidity</a></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
   </ol>
 </details>
-
-
-
 <!-- ABOUT THE PROJECT -->
 ## About The Project
-This repository contains a Python-based Cardano smart contract that utilizes pre-production test data from Charli3 oracle feeds as a use case.
 
-This project has been designed as an educational resource to teach the general public how to access Charli3's oracles information. Therefore, the contract addresses, wallets, tokens, NFTs, and related information are intended for use in test environments only and should not be used in a production environment. Nonetheless, the structure, logic, and methods used in this repository can be used as a foundation for developing contracts that interact with production Charli3's feeds.
+This project serves as an educational resource designed to teach developers how to access and utilize Charli3's oracle information. All contract addresses, wallets, tokens, NFTs, and related components are intended exclusively for test environments and should not be deployed in production. However, the structure, logic, and methodologies demonstrated in this repository provide a solid foundation for developing contracts that interact with Charli3's production feeds.
 
-The swap contract enables the exchange of native tokens through a wallet, based on exchange rates provided by an oracle. The contract utilizes a UTXO to store different tokens, such as BTC and tADA. Off-chain operations supported by the contract include:
+## Swap Contract Overview
 
-* The "Run swap" transaction initiates the creation of a UTXO at the contract address, which contains a minted NFT. This serves as an identifier for the UTXO that will hold two assets.
-* "Add liquidity" transaction enables the addition of specific amounts of tokens to the swap's UTXO. These quantities must be present in the wallet of the swap's creator.
-* "Swap A" transaction allows the exchange of asset A from the user's wallet to the swap's UTXO in exchange for asset B.
-* "Swap B" transaction enables the exchange of asset B from the user's wallet to the swap's UTXO in exchange for asset A.
+The swap contract facilitates the exchange of native tokens through a wallet based on exchange rates provided by an oracle. The contract uses a UTXO to store different tokens, such as BTC and tADA. The contract supports several off-chain operations:
 
+* **Run Swap**: Initiates the creation of a UTXO at the contract address containing a minted NFT. This NFT serves as an identifier for the UTXO that will hold two assets.
+* **Add Liquidity**: Enables the addition of specific token amounts to the swap's UTXO. These tokens must be present in the wallet of the swap's creator.
+* **Swap A**: Allows exchange of asset A from the user's wallet to the swap's UTXO in exchange for asset B.
+* **Swap B**: Enables exchange of asset B from the user's wallet to the swap's UTXO in exchange for asset A.
 
 *Note:* Documentation for the off-chain integration of the send-odv-request can be found [here](https://github.com/Charli3-Official/swap-demo-contract/blob/main/swap_demo_contract/docs/odv-request.org).
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+## ODV Request (On Demand Validation)
+### Overview
+The ODV (On-Demand Validation) request is a specialized API protocol that enables real-time oracle data retrieval from the Charli3 network. This mechanism allows smart contracts to access reliable, multi-source exchange rate data precisely when needed, rather than depending solely on periodically updated feeds.
 
+### Technical Process
 
+1. **Initial API Request**: The client sends an API request to multiple Charli3 nodes, specifying the desired exchange rate pair (e.g., ADA/USD).
+
+2. **Data Collection**: Each Charli3 node independently:
+   - Queries multiple predefined data sources based on their configuration
+   - Performs data quality checks and outlier detection
+   - Normalizes the collected data for consistency
+
+3. **Aggregation**: Nodes apply statistical methods to aggregate data from multiple sources into a single reliable value, reducing the impact of any single anomalous source.
+
+4. **Response Generation**: The aggregated data is returned to the requesting client along with metadata about the sources and aggregation methods used.
+
+5. **Transaction Construction**: Using the received data, the client constructs an aggregate transaction that incorporates all node-provided feed information.
+
+6. **Verification & Signing**: In a second API call, the constructed transaction is sent back to the Charli3 nodes for verification:
+   - Each node validates that its feed data was correctly included
+   - Upon successful verification, nodes cryptographically sign the transaction
+   - Signed transactions are returned to the requesting client
+
+7. **Signature Consolidation**: The client consolidates all signatures from participating nodes into a complete, multi-signed transaction.
+
+8. **Blockchain Submission**: The fully signed transaction is submitted to the blockchain for inclusion in the next block.
+9. **Payment Processing**: As part of the transaction, the client includes token payments to compensate node operators for their services, creating a sustainable economic model.
+
+### Benefits
+
+- **Real-Time Data**: Provides up-to-date exchange rates at the exact moment they're needed
+- **Multi-Source Reliability**: Combines data from multiple sources to ensure accuracy
+- **Same-Block Execution**: The feed data and its consumption can occur within the same blockchain block
+- **Cryptographic Verification**: All data is verifiably signed by multiple independent node operators
+- **Economic Incentives**: Built-in payment mechanism ensures network sustainability and service quality
+
+### Integration
+
+For detailed implementation instructions and code examples for integrating ODV requests into your applications, refer to the [odv-request documentation](https://github.com/Charli3-Official/swap-demo-contract/blob/main/swap_demo_contract/docs/odv-request.org).
 ### Built With
 
-* [Pycardano 0.11.1](https://pycardano.readthedocs.io/en/latest/index.html)
+* [Pycardano 0.12.0](https://github.com/Charli3-Official/pycardano/pull/6)
 
-*Note:* Tested with: ogmios:v6.6.1, kupo:v2.9.0, and cardano-node:9.1.1 and Blockfrost
+*Note:* Tested with: ogmios:v6.11.0, kupo:v2.10.0, and cardano-node:10.1.4
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
-<!-- GETTING STARTED -->
 ## Getting Started
 
-The initial configuration is sourced from the pycardano repository. To create the project environment variables, we recommend reading the documentation at [using Pycardano](https://pycardano.readthedocs.io/en/latest/tutorial.html#using-pycardano).
+The initial configuration follows the pycardano repository guidelines. For project environment variables setup, we recommend reviewing the documentation at [using Pycardano](https://pycardano.readthedocs.io/en/latest/tutorial.html#using-pycardano).
 
 ### Prerequisites
 
+Install the required packages using Poetry:
 
-The required packages can be installed using pip with the following command:
+```sh
+poetry update
+```
+## Installation
 
-  ```sh
-  poetry update
-  ```
-
-### Installation
-
-1. Get an API Key at [Blockfrost](https://blockfrost.io/), Ogmios/Kupo configuration or your personal configuration.
+1. Set up an Ogmios and Kupo connection. This is currently the only supported approach for this tutorial.
 2. Clone the repo:
    ```sh
    git clone https://github.com/Charli3-Official/swap-pycardano.git
    ```
-3. Enter your API and personal configuration based on `config.sample.yaml`.
-   ```
-   MNEMONIC_24:
-
-   # Swap Contract
-   swap_contract_address: addr_test1wp5p6ztmlsc5agr2crc3yhrqpwrkq7a29a2muyzn3ekdrhqmzzdjz
-   swap_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
-
-   token_a_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
-   token_a_asset_name: BTC
-   swap_asset_name: SWAP
-
-   # Oracle Contract Configuration
-   oracle_contract_address: addr_test1wzy5k07lnrrdjjqwzq4t3vvn0zp5de34s4z7res9y4jjuwcaz3amy
-
-   aggstate_minting_policy: a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f
-   aggstate_asset_name: AggState
-
-   oracle_nft_minting_policy: a71cbfd2e54d057612ca21f8d9a3637fbb307bd74fa33d4f6174e82f
-   oracle_nft_asset_name: OracleFeed
-
-   c3_token_hash: c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828
-   c3_token_name: TestC3
-
-   script_input_oracle: 236d7c1e189c39f0ed2a7a6aa079cfc180d1a089abb2f38173c50e7547e0d9f9#0
-
-   ## Dynamic payment oracle
-   dynamic_payment_oracle_addr:
-   dynamic_payment_oracle_minting_policy:
-   dynamic_payment_oracle_asset_name:
-
-   # Contract Addresses
-   blockfrost:
-     project_id: preprodXXX
-   ogmios:
-       ws_url: ws://0.0.0.0:1337
-       kupo_url: http://0.0.0.0:1442
-
-   ```
+3. Configure connection information and personal settings based on the template in `config.sample.yaml`.
 
   <p align="right">(<a href="#readme-top">back to top</a>)</p>
 <!-- USAGE EXAMPLES -->
 
-
-
 ## Usage
-The project includes a command-line interface for easy transaction submission. To use it, first navigate to the root directory and ensure you have run `poetry install`. Then, execute the command `poetry run odv-demo --help` to display detailed information on the available command-line options.
 
+The project includes a comprehensive command-line interface (CLI) for seamless transaction submission. To begin using the CLI, follow these steps:
+
+1. Navigate to the root directory of the project
+2. Ensure you have run `poetry install` to set up the environment
+3. Execute `charli3 --help` to display detailed information on all available command-line options
+
+### Common Examples
+
+Below are some frequently used commands:
+
+#### Fetch Latest Oracle Price
+Retrieve the most recent price data from the oracle contract:
+```sh
+charli3 ogmios preprod oracle-contract --feed
 ```
-usage: python main.py [-h] [{blockfrost,ogmios}] [{preprod,mainnet}] {trade,user,swap-contract,oracle-contract,send-odv-request} ...
+### Get Oracle Contract Address
+Obtain the address of the oracle contract:
 
-The swap python script is a demonstrative smart contract (Plutus v2) featuring the interaction with a Charli3's oracle. This script uses the inline oracle feed as reference input simulating the exchange rate
-between tADA and BTC to sell or buy assets from a swap contract in the test environment of preproduction.
-
-positional arguments:
-  {blockfrost,ogmios}   External service to read blockhain information
-  {preprod,mainnet}     Blockchain environment
-  {trade,user,swap-contract,oracle-contract,send-odv-request}
-    trade               Call the trade transaction to exchange a user asset with another asset at the swap contract. Supported assets tADA and BTC.
-    user                Obtain information about the wallet of the user who participate in the trade transaction.
-    swap-contract       Obtain information about the SWAP smart contract.
-    oracle-contract     Obtain information about the ORACLE smart contract.
-    send-odv-request    Send a validation request on demand to ODV-Charli3 Oracle.
-
-options:
-  -h, --help            show this help message and exit
-
-Copyrigth: (c) 2020 - 2024 Charli3
+```sh
+charli3 ogmios preprod oracle-contract --address
 ```
+### Check User Wallet Liquidity
+View the available liquidity in your user wallet:
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-Documentation for the off-chain integration of the send-odv-request can be found [here](https://github.com/Charli3-Official/swap-demo-contract/blob/main/swap_demo_contract/docs/odv-request.org).
-
-<!-- LICENSE -->
-## License
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+```sh
+charli3 ogmios preprod user --liquidity
+```
+### Monitor Swap Contract Liquidity
+Inspect the current liquidity within the swap contract:
+```sh
+charli3 ogmios preprod swap-contract --liquidity
+```

@@ -9,22 +9,22 @@ def create_parser():
         "script uses the inline oracle feed as reference input simulating the "
         "exchange rate between tADA and BTC to sell or buy assets from a swap "
         "contract in the test environment of preproduction. ",
-        epilog="Copyrigth: (c) 2020 - 2024 Charli3",
+        epilog="Copyrigth: (c) 2020 - 2025 Charli3",
     )
 
     # Service to connect to the blockchain
     parser.add_argument(
         "connection",
-        choices=["blockfrost", "ogmios"],
+        choices=["ogmios"],
         nargs="?",
-        default="blockfrost",
+        default="ogmios",
         help="External service to read blockhain information",
     )
 
     # Service to connect to the blockchain
     parser.add_argument(
         "environment",
-        choices=["preprod", "mainnet"],
+        choices=["preprod"],
         nargs="?",
         default="preprod",
         help="Blockchain environment",
