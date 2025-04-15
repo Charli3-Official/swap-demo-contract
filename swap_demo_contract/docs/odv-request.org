@@ -186,13 +186,3 @@ When implementing your own ODV client:
 2. *Timeout Management*: Set appropriate timeouts for node communication
 3. *Signature Verification*: Always validate node signatures before processing data
 4. *Transaction Building*: Ensure proper handling of the two-phase process (data collection → transaction signing)
-
-** Next Steps
-
-After understanding the ODV client implementation:
-
-1. Explore configuration examples in ~config.sample.yaml~
-2. Review integration tests for validation techniques
-3. Consider logging strategies for production deployments
-
-The reference implementation demonstrates best practices for secure and reliable oracle data retrieval in a production environment.
