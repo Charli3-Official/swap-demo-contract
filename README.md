@@ -201,8 +201,7 @@ wallet:
 ```
 
 To perform ODV requests, you will need `TestC3` tokens for transaction payments
-Request test tokens by joining our Discord server and posting in the `#odv` channel.
-Our team will provide you with the necessary tokens for testing purposes
+Request test tokens by joining our Discord server.
 
 
 **Note**: All endpoints, addresses, and token configurations in the sample file have been pre-verified to work correctly. You only need to add your connection URLs and obtain test tokens.
@@ -250,4 +249,32 @@ charli3 ogmios preprod user --liquidity
 Inspect the current liquidity within the swap contract:
 ```sh
 charli3 ogmios preprod swap-contract --liquidity
+```
+
+### Data Sources (BTC/USD)
+For this demo, each Charli3 node pulls BTC/USD price information from these data sources. For more information, check [CCXT](https://github.com/ccxt/ccxt)
+
+```
+sources:
+   - binanceus
+   - bingx
+   - bitfinex1
+   - bitget
+   - bitmart
+   - bitmex
+   - bitstamp
+   - coinbase
+   - coinbaseexchange
+   - coinlist
+   - coinmetro
+   - coinsph
+   - cryptocom
+   - delta
+   - deribit
+   - digifinex
+   - gemini
+   - hashkey
+   - hitbtc
+   - hollaex
+   - htx
 ```
