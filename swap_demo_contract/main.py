@@ -5,7 +5,7 @@ from pathlib import Path
 
 import cbor2
 import click
-from pycardano import Network, PlutusV2Script, TransactionId, TransactionInput
+from pycardano import PlutusV2Script
 
 from swap_demo_contract.client.format import (
     print_aggregate_summary,
@@ -35,7 +35,6 @@ from swap_demo_contract.utils.load_configuration import (
 )
 from swap_demo_contract.utils.parser import create_parser
 
-from .lib.oracle_user import OracleUser
 from .mint import Mint
 from .swap import SwapContract
 
