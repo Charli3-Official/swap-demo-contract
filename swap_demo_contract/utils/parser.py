@@ -7,7 +7,7 @@ def create_parser():
         description="The swap python script is a demonstrative smart contract "
         "(Plutus v2) featuring the interaction with a Charli3's oracle. This "
         "script uses the inline oracle feed as reference input simulating the "
-        "exchange rate between tADA and tUSDT to sell or buy assets from a swap "
+        "exchange rate between tADA and BTC to sell or buy assets from a swap "
         "contract in the test environment of preproduction. ",
         epilog="Copyrigth: (c) 2020 - 2024 Charli3",
     )
@@ -37,8 +37,8 @@ def create_parser():
     trade_subparser = subparser.add_parser(
         "trade",
         help="Call the trade transaction to exchange a user asset with another "
-        "asset at the swap contract. Supported assets tADA and tUSDT.",
-        description="Trade transaction to sell and buy tUSDT or tADA.",
+        "asset at the swap contract. Supported assets tADA and BTC.",
+        description="Trade transaction to sell and buy BTC or tADA.",
     )
 
     # Create a subparser for each trade option
@@ -57,15 +57,15 @@ def create_parser():
         help="Amount of lovelace to trade.",
     )
 
-    tusdt_subparser_trade_subparser = subparser_trade_subparser.add_parser(
-        "tUSDT", help="Toy USDT asset."
+    tbtc_subparser_trade_subparser = subparser_trade_subparser.add_parser(
+        "BTC", help="Toy BTC asset."
     )
-    tusdt_subparser_trade_subparser.add_argument(
+    tbtc_subparser_trade_subparser.add_argument(
         "--amount",
         type=int,
         default=0,
-        metavar="tUSDT",
-        help="Amount of tUSDT to trade.",
+        metavar="BTC",
+        help="Amount of BTC to trade.",
     )
 
     # Create a parser for the "user" choice
@@ -110,7 +110,7 @@ def create_parser():
         nargs=2,
         action="store",
         dest="addliquidity",
-        metavar=("tUSDT", "tADA"),
+        metavar=("BTC", "tADA"),
         type=int,
         help="Add asset liquidity at swap UTXO.",
     )
@@ -131,7 +131,7 @@ def create_parser():
     oracle_contract_parser.add_argument(
         "--feed",
         action="store_true",
-        help="Print the oracle feed (exchange rate) tUSDT/tADA.",
+        help="Print the oracle feed (exchange rate) BTC/tADA.",
     )
 
     oracle_contract_parser.add_argument(

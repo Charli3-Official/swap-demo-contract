@@ -234,6 +234,7 @@ async def get_oracle_exchange_rate(feed_utxos) -> tuple[UTxO, int]:
     """Get oracle's feed exchange rate with the most recent creation time."""
     newest_utxo = None
     newest_time = 0
+    price = 0
 
     feed_utxos_with_datum = convert_cbor_to_agg_states(feed_utxos)
 
@@ -252,9 +253,7 @@ async def get_oracle_exchange_rate(feed_utxos) -> tuple[UTxO, int]:
         price = newest_utxo.output.datum.price_data.get_price
         return (newest_utxo, price)
     else:
-        return (None, 0)
-        if not utxos:
-            raise ValidationError("No UTxOs found with asset name")
+        return (newest_utxo, price)
 
 
 def get_fee_rate_reference_utxo(utxos: list[UTxO]) -> UTxO:

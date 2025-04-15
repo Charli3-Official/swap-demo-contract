@@ -58,7 +58,7 @@ This repository contains a Python-based Cardano smart contract that utilizes pre
 
 This project has been designed as an educational resource to teach the general public how to access Charli3's oracles information. Therefore, the contract addresses, wallets, tokens, NFTs, and related information are intended for use in test environments only and should not be used in a production environment. Nonetheless, the structure, logic, and methods used in this repository can be used as a foundation for developing contracts that interact with production Charli3's feeds.
 
-The swap contract enables the exchange of native tokens through a wallet, based on exchange rates provided by an oracle. The contract utilizes a UTXO to store different tokens, such as tUSDT and tADA. Off-chain operations supported by the contract include:
+The swap contract enables the exchange of native tokens through a wallet, based on exchange rates provided by an oracle. The contract utilizes a UTXO to store different tokens, such as BTC and tADA. Off-chain operations supported by the contract include:
 
 * The "Run swap" transaction initiates the creation of a UTXO at the contract address, which contains a minted NFT. This serves as an identifier for the UTXO that will hold two assets.
 * "Add liquidity" transaction enables the addition of specific amounts of tokens to the swap's UTXO. These quantities must be present in the wallet of the swap's creator.
@@ -110,7 +110,7 @@ The required packages can be installed using pip with the following command:
    swap_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
 
    token_a_minting_policy: c6f192a236596e2bbaac5900d67e9700dec7c77d9da626c98e0ab2ac
-   token_a_asset_name: USDT
+   token_a_asset_name: BTC
    swap_asset_name: SWAP
 
    # Oracle Contract Configuration
@@ -153,13 +153,13 @@ The project includes a command-line interface for easy transaction submission. T
 usage: python main.py [-h] [{blockfrost,ogmios}] [{preprod,mainnet}] {trade,user,swap-contract,oracle-contract,send-odv-request} ...
 
 The swap python script is a demonstrative smart contract (Plutus v2) featuring the interaction with a Charli3's oracle. This script uses the inline oracle feed as reference input simulating the exchange rate
-between tADA and tUSDT to sell or buy assets from a swap contract in the test environment of preproduction.
+between tADA and BTC to sell or buy assets from a swap contract in the test environment of preproduction.
 
 positional arguments:
   {blockfrost,ogmios}   External service to read blockhain information
   {preprod,mainnet}     Blockchain environment
   {trade,user,swap-contract,oracle-contract,send-odv-request}
-    trade               Call the trade transaction to exchange a user asset with another asset at the swap contract. Supported assets tADA and tUSDT.
+    trade               Call the trade transaction to exchange a user asset with another asset at the swap contract. Supported assets tADA and BTC.
     user                Obtain information about the wallet of the user who participate in the trade transaction.
     swap-contract       Obtain information about the SWAP smart contract.
     oracle-contract     Obtain information about the ORACLE smart contract.

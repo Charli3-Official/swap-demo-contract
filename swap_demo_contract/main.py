@@ -50,88 +50,103 @@ async def display(args):
 
     swap_contract = SwapContract(environment.chain_query, odv, wallet, swap)
 
-    if args.subparser == "trade" and args.subparser_trade_subparser == "tADA":
-        print("TODO")
-        # await swap_contract.swap_B(
-        #     args.amount,
-        #     user_address,
-        #     swap_address,
-        #     swap_script,
-        #     extended_payment_skey,
-        # )
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    swap_script_path = os.path.join(current_dir, "utils", "scripts", "swap.plutus")
+    with open(swap_script_path, "r") as f:
+        script_hex = f.read()
+        swap_script = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
 
-    elif args.subparser == "trade" and args.subparser_trade_subparser == "tUSDT":
-        print("TODO")
-        # await swap_contract.swap_A(
-        #     args.amount,
-        #     user_address,
-        #     swap_address,
-        #     swap_script,
-        #     extended_payment_skey,
-        # )
+    if args.subparser == "trade" and args.subparser_trade_subparser == "tADA":
+        await swap_contract.swap_B(
+            args.amount,
+            wallet.address,
+            swap.address,
+            swap_script,
+            wallet.esigning_key,
+        )
+
+    elif args.subparser == "trade" and args.subparser_trade_subparser == "BTC":
+        await swap_contract.swap_A(
+            args.amount,
+            wallet.address,
+            swap.address,
+            swap_script,
+            wallet.esigning_key,
+        )
 
     elif args.subparser == "user" and args.liquidity:
-        print("TODO")
-        # tlovelace = await swap_contract.available_user_tlovelace(user_address)
-        # tUSDT = await swap_contract.available_user_tusdt(user_address)
-        # print("User wallet's liquidity:")
-        # print(f"- {tlovelace // 1000000} tADA ({tlovelace} tlovelace)")
-        # print(f"- {tUSDT} tUSDT")
+        tlovelace = await swap_contract.available_user_tlovelace(wallet.address)
+        tBTC = await swap_contract.available_user_tbtc(wallet.address)
+        print_header("User wallet's liquidity:")
+
+        print_status("Token A (BTC)", f"{tBTC}")
+        print_status(
+            "Token B (tADA)",
+            f"{tlovelace // 1000000} tADA ({tlovelace} tlovelace)",
+        )
+
     elif args.subparser == "user" and args.address:
-        print(f"User's wallet address (Mnemonic): {wallet.address}")
+        print_header("Wallet address")
+        print_status("Derived from mnemonic-24", str(wallet.address))
 
     elif args.subparser == "swap-contract" and args.liquidity:
-        print("TODO")
-        # swap_utxo = await swap_contract.get_swap_utxo()
-        # tlovelace = swap_utxo.output.amount.coin
-        # tUSDT = await swap_contract.add_asset_swap_amount(0)
-        # print("Swap contract liquidity:")
-        # print(f"- {tlovelace // 1000000} tADA ({tlovelace} tlovelace)")
-        # print(f"- {tUSDT} tUSDT")
+        swap_utxo = await swap_contract.get_swap_utxo()
+        tlovelace = swap_utxo.output.amount.coin
+        tBTC = await swap_contract.add_asset_swap_amount(0)
+        print_header("Swap contract liquidity:")
+
+        print_status("Token A (BTC)", f" {tBTC}")
+        print_status(
+            "Token B (tADA)", f"{tlovelace // 1000000} ({tlovelace} tlovelace)"
+        )
 
     elif args.subparser == "swap-contract" and args.address:
-        print(f"Swap contract's address: {swap.address}")
+        print_header("Swap")
+        print_status("Contract Address", str(swap.address))
 
     elif args.subparser == "swap-contract" and args.addliquidity:
-        print("TODO")
-        # await swap_contract.add_liquidity(
-        #     args.addliquidity[0],
-        #     args.addliquidity[1],
-        #     user_address,
-        #     swap_address,
-        #     swap_script,
-        #     extended_payment_skey,
-        # )
+        await swap_contract.add_liquidity(
+            args.addliquidity[0],
+            args.addliquidity[1],
+            wallet.address,
+            swap.address,
+            swap_script,
+            wallet.esigning_key,
+        )
     elif args.subparser == "swap-contract" and args.soracle:
-        print("TODO")
-        # current_dir = os.path.dirname(os.path.abspath(__file__))
-        # mint_script_path = os.path.join(
-        #     current_dir, "utils", "scripts", "mint_script.plutus"
-        # )
-        # with open(mint_script_path, "r") as f:
-        #     script_hex = f.read()
-        #     plutus_script_v2 = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        mint_script_path = os.path.join(
+            current_dir, "utils", "scripts", "mint_script.plutus"
+        )
+        with open(mint_script_path, "r") as f:
+            script_hex = f.read()
+            plutus_script_v2 = PlutusV2Script(cbor2.loads(bytes.fromhex(script_hex)))
 
-        # swap_utxo_nft = Mint(
-        #     context, extended_payment_skey, user_address, swap_address, plutus_script_v2
-        # )
-        # await swap_utxo_nft.mint_nft_with_script()
+        swap_utxo_nft = Mint(
+            environment.chain_query,
+            wallet.esigning_key,
+            wallet.address,
+            swap.address,
+            plutus_script_v2,
+        )
+        await swap_utxo_nft.mint_nft_with_script()
 
     elif args.subparser == "oracle-contract" and args.feed:
         try:
             feed_utxos = environment.chain_query.get_utxos_with_asset_from_kupo(
                 odv.policy_id, odv.nft_aggstate
             )
-            exchange = await get_oracle_exchange_rate(feed_utxos)
+            _, exchange = await get_oracle_exchange_rate(feed_utxos)
 
-            print("Oracle Feed")
-            print(f"Last Price: {exchange} BTC/USD")
+            print_header("Oracle Feed")
+            print_status("Price BTC/USD", str(exchange))
 
         except Exception as e:
             return f"An error occurred while fetching the oracle feed: {e}"
 
     elif args.subparser == "oracle-contract" and args.address:
-        print(f"Oracle On-Demand-Validation (ODV) contract's address: \n{odv.address}")
+        print_header("On-Demand-Validation (ODV)")
+        print_status("Contract Address", str(odv.address))
 
     elif args.subparser == "send-odv-request":
 
