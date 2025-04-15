@@ -20,18 +20,19 @@ odv_contract:
     asset_name: TestC3 # Test Charli3 (TestC3)
   odv_validity_length: 120000 # milliseconds
   nodes:
-    - root_url: "http://x.x.x.x:yyyy"
+    - root_url: "http://34.44.145.159:8000"
       pub_key: "8f6459c925a37c1d91db2bf6a192435fc66e9c7d211da201465f31fa"
-    - root_url: "http://x.x.x.x:yyyy"
+    - root_url: "http://34.44.145.159:8001"
       pub_key: "5515d53d4106fb3ad6dba02ca8fc99e5a01e80a6b093e47a56c41cfe"
-    - root_url: "http://x.x.x.x:yyyy"
+    - root_url: "http://34.44.145.159:8002"
       pub_key: "4a52563ed7786321880b6de7a6ed4fad0fa559fa0948e5d165b7aacd"
-    - root_url: "http://x.x.x.x:yyyy"
+    - root_url: "http://34.44.145.159:8003"
       pub_key: "99dbaf00c01dc85cfc68cce75844788ce838286f4bbe9537706786b7"
-    - root_url: "http://x.x.x.x:yyyy"
+    - root_url: "http://34.44.145.159:8004"
       pub_key: "bfa5f1e11606c55d2f5ab2ecc65d54eb6a4b24b334a8236a8d24c44d"
-    - root_url: "http://x.x.x.x:yyyy"
+    - root_url: "http://34.44.145.159:8005"
       pub_key: "f07c5a134e88f5692247cca1240b37c54d4688e5e8a84ddc460e89e1"
+
 
 # Swap Contract
 swap_contract:

@@ -76,7 +76,25 @@
 
 ## About The Project
 
-This project serves as an educational resource designed to teach developers how to access and utilize Charli3's oracle information. All contract addresses, wallets, tokens, NFTs, and related components are intended exclusively for test environments and should not be deployed in production. However, the structure, logic, and methodologies demonstrated in this repository provide a solid foundation for developing contracts that interact with Charli3's production feeds.
+### Educational Resource Disclaimer
+This project serves as an educational resource designed to teach developers how to access and utilize Charli3's oracle infrastructure. All contract addresses, wallets, tokens, NFTs, and related components included in this repository are intended exclusively for test environments and should not be deployed in production systems.
+
+### Important Notes:
+
+The payment token used in this demonstration (TestC3) is a simulated asset with no real-world value in relation to the official Charli3 token.
+All reward quantities, distribution mechanisms, and payment calculations presented here are for illustrative purposes only and do not reflect actual production values or economics.
+The examples provided are not subject to real-world pricing and are simplified for educational clarity.
+
+While this is a test environment implementation, the architecture, logic, and methodologies demonstrated in this repository provide a solid foundation for developing contracts that interact with Charli3's production oracle feeds.
+### Production Considerations:
+
+
+Blockchain fees will vary depending on the network environment (testnet, mainnet, etc.)
+Operational costs scale with the number of oracle nodes utilized
+Production implementations should include additional security measures beyond what is demonstrated here
+
+We encourage developers to thoroughly test their implementations in appropriate test environments before considering any production deployment.
+
 
 ## Swap Contract Overview
 
@@ -88,14 +106,18 @@ The swap contract facilitates the exchange of native tokens through a wallet bas
 * **Swap B**: Enables exchange of asset B from the user's wallet to the swap's UTXO in exchange for asset A.
 
 ## ODV Request (On Demand Validation)
+
+### Command Showcase
+
+![Charli3 ODV request](https://raw.githubusercontent.com/Charli3-Official/swap-demo-contract/main/swap_demo_contract/utils/assets/odv-request.gif)
+
 ### Overview
 The ODV (On-Demand Validation) request is a specialized API protocol that enables real-time oracle data retrieval from the Charli3 network. This mechanism allows smart contracts to access reliable, multi-source exchange rate data precisely when needed, rather than depending solely on periodically updated feeds.
 
 ### Technical Process
 
 1. **Initial API Request**: The client sends an API request to multiple Charli3 nodes, specifying the desired exchange rate pair (e.g., ADA/USD).
-
-2. **Data Collection**: Each Charli3 node independently:
+2. **Data Collection**: Charli3 nodes operate independently using [Charli3 Dendrite](https://github.com/Charli3-Official/charli3-dendrite), our specialized solution for on-chain data retrieval
    - Queries multiple predefined data sources based on their configuration
    - Performs data quality checks and outlier detection
    - Normalizes the collected data for consistency
@@ -129,7 +151,7 @@ The ODV (On-Demand Validation) request is a specialized API protocol that enable
 For detailed implementation instructions and code examples for integrating ODV requests into your applications, refer to the [odv-request documentation](https://github.com/Charli3-Official/swap-demo-contract/blob/main/swap_demo_contract/docs/odv-request.org).
 ### Built With
 
-* [Pycardano 0.12.0](https://github.com/Charli3-Official/pycardano/pull/6)
+* [Charli3/Pycardano 0.12.0 (fork)](https://github.com/Charli3-Official/pycardano/pull/6)
 
 *Note:* Tested with: ogmios:v6.11.0, kupo:v2.10.0, and cardano-node:10.1.4
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -139,23 +161,61 @@ For detailed implementation instructions and code examples for integrating ODV r
 The initial configuration follows the pycardano repository guidelines. For project environment variables setup, we recommend reviewing the documentation at [using Pycardano](https://pycardano.readthedocs.io/en/latest/tutorial.html#using-pycardano).
 
 ### Prerequisites
-
-Install the required packages using Poetry:
-
+Before beginning, ensure you have [Poetry](https://python-poetry.org/docs/#installing-manually) installed on your system for package management. Then install all required dependencies:
 ```sh
 poetry update
 ```
-## Installation
+1. Installation
 
-1. Set up an Ogmios and Kupo connection. This is currently the only supported approach for this tutorial.
-2. Clone the repo:
-   ```sh
-   git clone https://github.com/Charli3-Official/swap-pycardano.git
-   ```
-3. Configure connection information and personal settings based on the template in `config.sample.yaml`.
+Clone the Repository
+```sh
+git clone https://github.com/Charli3-Official/swap-pycardano.git
+cd swap-pycardano
+```
+2. Install Project Dependencies
+```sh
+poetry install
+```
 
-  <p align="right">(<a href="#readme-top">back to top</a>)</p>
-<!-- USAGE EXAMPLES -->
+3. Set Up Blockchain Connections
+
+This tutorial requires connections to Ogmios and Kupo services for blockchain interaction. There are currently no alternative connection methods supported.
+
+Create your configuration file by copying the template:
+```sh
+cp config.sample.yaml config.yaml.
+```
+Then edit `config.yaml` with your specific settings:
+```yaml
+# Required connection settings
+environment:
+  network: testnet
+  ogmios_kupo:
+    ogmios_url: "YOUR_OGMIOS_URL_HERE"  # Required
+    kupo_url: "YOUR_KUPO_URL_HERE"      # Required
+
+wallet:
+  MNEMONIC_24: "MNEMONIC_HERE" # Required
+
+# The rest of the configuration contains functional defaults
+```
+
+To perform ODV requests, you will need `TestC3` tokens for transaction payments
+Request test tokens by joining our Discord server and posting in the `#odv` channel.
+Our team will provide you with the necessary tokens for testing purposes
+
+
+**Note**: All endpoints, addresses, and token configurations in the sample file have been pre-verified to work correctly. You only need to add your connection URLs and obtain test tokens.
+
+Once configuration is complete, your environment will be ready for testing ODV requests and interacting with the swap contract.
+
+## Usage
+
+The project includes a comprehensive command-line interface (CLI) for seamless transaction submission. To begin using the CLI, follow these steps:
+
+1. Navigate to the root directory of the project
+2. Ensure you have run `poetry install` to set up the environment
+3. Execute `charli3 --help` to display detailed information on all available command-line options
 
 ## Usage
 
