@@ -20,16 +20,16 @@ options:
 To execute an ODV request, connecting with all nodes, requesting data, signing the transaction, and submitting it to the blockchain:
 
 #+begin_src bash
-poetry run odv-demo ogmios preprod send-odv-request
+charli3 ogmios preprod send-odv-request
 #+end_src
 
-The command automatically calculates the required C3 tokens for the aggregation service.
+The command automatically calculates the required payment tokens for the aggregation service.
 
 * Payment Calculation
 
 ** Static Payment Example
 
-Let's examine how payment is calculated using a sample ODV oracle contract configuration:
+Let's examine how payment is calculated using a sample ODV oracle contract configuration and C3 as payment token:
 
 #+begin_src yml
 oracle_settings:
@@ -41,7 +41,6 @@ oracle_settings:
   os_updated_nodes: 10000 # 100%
   os_node_fee_price:
     node_fee: 1500000 # 1.5 C3
-    aggregate_fee: 2500000 # 2.5 C3
     platform_fee: 1000000 # 1 C3
 #+end_src
 
@@ -51,9 +50,8 @@ The payment calculation works as follows:
 2. Check the percentage of nodes required via `os_updated_nodes` (100% in this example)
 3. Calculate the total payment:
    - Node fee × Number of required nodes: 1.5 C3 × 2 = 3 C3
-   - Add aggregate fee: 2.5 C3
    - Add platform fee: 1 C3
-   - Total: 6.5 C3 (6,500,000 lovelace-equivalent token units)
+   - Total: 4 C3 (4,000,000 lovelace-equivalent token units)
 
 ** Dynamic Payment
 
@@ -69,14 +67,13 @@ oracle_settings:
   os_updated_nodes: 10000 # 100%
   os_node_fee_price:
     node_fee: 1500000 # 1.5 ADA
-    aggregate_fee: 2500000 # 2.5 ADA
     platform_fee: 1000000 # 1 ADA
   rate_nft: Union[SomeAsset, NoDatum]
 #+end_src
 
 The key difference here is that values are denominated in ADA but paid in C3 tokens at the current exchange rate.
 
-The payment token is configured in the `config.sample.yaml` file:
+The payment token is configured in the =config.sample.yaml= file:
 
 #+begin_src bash
   payment_token: # Reward token
@@ -108,7 +105,7 @@ class Asset(PlutusData):
             raise ValueError("Policy ID must be 28 bytes long")
 #+end_src
 
-Example: If the ADA/C3 exchange rate is 4.9 ADA per C3, and the total fee in ADA is 6.5 ADA, then the payment would be 6.5 ÷ 4.9 = 1.33 C3, or 1,330,000 token units.
+Example: If the ADA/C3 exchange rate is 4.9 ADA per C3, and the total fee in ADA is 4 ADA, then the payment would be 4 ÷ 4.9 = 0.81633 C3, or 816,330 token units.
 
 Users can send any amount of C3 tokens, but the contract will only create an aggregation if the minimum required amount is covered. Any excess goes to the platform administrator, while nodes receive their predefined rewards.
 
