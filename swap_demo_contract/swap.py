@@ -4,28 +4,16 @@ from datetime import datetime
 
 import pycardano as pyc
 
+from swap_demo_contract.client.format import print_information, print_status
 from swap_demo_contract.lib.chain_query import ChainQuery
+from swap_demo_contract.lib.common import get_oracle_exchange_rate
+from swap_demo_contract.utils.load_configuration import (
+    OdvClientConfig,
+    SwapConfig,
+    WalletConfig,
+)
 
-from .lib.datums import GenericData
 from .lib.redeemers import AddLiquidity, SwapA, SwapB
-
-
-class Swap:
-    """Class Swap for interact with the assets in the swap operation
-    and identify the Swap's NFTs
-
-    Attribures:
-        swap_nft: The NFT identifier of the swap utxo
-        coinA: Asset
-    """
-
-    def __init__(
-        self,
-        swap_nft: pyc.MultiAsset,
-        coinA: pyc.MultiAsset,
-    ) -> None:
-        self.swap_nft = swap_nft
-        self.coinA = coinA
 
 
 class SwapContract:
@@ -41,17 +29,15 @@ class SwapContract:
     def __init__(
         self,
         chain_query: ChainQuery,
-        oracle_nft: pyc.MultiAsset,
-        oracle_addr: pyc.Address,
-        swap_addr: pyc.Address,
-        swap: Swap,
+        odv_config: OdvClientConfig,
+        wallet_config: WalletConfig,
+        swap: SwapConfig,
     ) -> None:
         self.chain_query = chain_query
-        self.oracle_addr = oracle_addr
-        self.swap_addr = swap_addr
+        self.odv_config = odv_config
         self.coin_precision = 1000000
         self.swap = swap
-        self.oracle_nft = oracle_nft
+        self.wallet = wallet_config
 
     async def add_liquidity(
         self,
@@ -67,11 +53,11 @@ class SwapContract:
         available_user_tADA = (
             await self.available_user_tlovelace(user_address) // 1000000
         )
-        available_user_tUSDT = await self.available_user_tusdt(user_address)
-        if available_user_tADA < amountB or available_user_tUSDT < amountA:
+        available_user_tBTC = await self.available_user_tbtc(user_address)
+        if available_user_tADA < amountB or available_user_tBTC < amountA:
             print(
                 f"""Error! The user's wallet  doesn't have enough liquidity!
-            Available: {available_user_tUSDT} tUSDT, {available_user_tADA} tADA"""
+            Available: {available_user_tBTC} BTC, {available_user_tADA} tADA"""
             )
         else:
             updated_swap_multi_asset, updated_swap_total_amount = (
@@ -110,7 +96,7 @@ class SwapContract:
             print(
                 f"- {updated_amountB_for_swap_utxo // 1000000} tADA ({updated_amountB_for_swap_utxo} tlovelaces)"
             )
-            print(f"- {updated_swap_total_amount} tUSDT.")
+            print(f"- {updated_swap_total_amount} BTC.")
 
     async def swap_A(
         self,
@@ -127,7 +113,7 @@ class SwapContract:
         amountB_precision = amountB * self.coin_precision
 
         swap_amountB_tADA = swap_utxo.output.amount.coin // 1000000
-        user_amountB_tUSDT = await self.available_user_tusdt(user_address)
+        user_amountB_tBTC = await self.available_user_tbtc(user_address)
 
         if amountB < 1:
             print(
@@ -135,11 +121,11 @@ class SwapContract:
             )
 
         elif amountB > swap_amountB_tADA:
-            print(f"Error! The user's wallet doesn't have enough liquidity!")
-            print(f"Available: {swap_amountB_tADA} tUSDT.")
-        elif amountA > user_amountB_tUSDT:
-            print(f"Error! The user's wallet doesn't have enough liquidity!")
-            print(f"Available: {user_amountB_tUSDT} tUSDT.")
+            print("Error! The user's wallet doesn't have enough liquidity!")
+            print(f"Available: {swap_amountB_tADA} BTC.")
+        elif amountA > user_amountB_tBTC:
+            print("Error! The user's wallet doesn't have enough liquidity!")
+            print(f"Available: {user_amountB_tBTC} BTC.")
         else:
             swap_redeemer = pyc.Redeemer(SwapA(amountA))
 
@@ -181,7 +167,7 @@ class SwapContract:
 
             print("Updated swap contract liquidity:")
             print(f"- {updated_amountB_for_swap_utxo} tlovelaces.")
-            print(f"- {updated_swap_total_amount} tUSDT.")
+            print(f"- {updated_swap_total_amount} BTC.")
 
     async def swap_B(
         self,
@@ -199,20 +185,20 @@ class SwapContract:
             await self.available_user_tlovelace(user_address) // 1000000
         )
 
-        available_swap_tusdt = await self.decrease_asset_swap_amount(0)
+        available_swap_tbtc = await self.decrease_asset_swap_amount(0)
         if amountA < 1:
-            print(
-                f"The minimum sale quantity of tUSDT is 1. Current value {amountA} tUSDT."
+            print_information(
+                f"The minimum sale quantity of BTC is 1. Current value {amountA} BTC."
             )
         elif amountB > available_user_tADA:
-            print(
+            print_information(
                 f"""Error! The user's wallet doesn't have enough liquidity!
             Available: {available_user_tADA} tADA."""
             )
-        elif amountA > available_swap_tusdt:
-            print(
+        elif amountA > available_swap_tbtc:
+            print_information(
                 f"""Error! The swap contract doesn't have enough liquidity!
-            Available: {available_swap_tusdt} tUSDT."""
+            Available: {available_swap_tbtc} BTC."""
             )
         else:
             swap_redeemer = pyc.Redeemer(SwapB(amountB))
@@ -259,56 +245,44 @@ class SwapContract:
                 .reference_inputs.add(oracle_feed_utxo.input)
             )
 
-            print(f"Exchanging {amountB} tADA for {amountA} tUSDT.")
+            print(f"Exchanging {amountB} tADA for {amountA} BTC.")
             await self.chain_query.submit_tx_builder(builder, sk, user_address)
             # await self.submit_tx_builder(builder, sk, user_address)
             print("Updated swap contract liquidity:")
             print(
                 f"- {updated_amountB_for_swap_utxo // 1000000 } tADA ({updated_amountB_for_swap_utxo} tlovelaces)."
             )
-            print(f"- {updated_masset_amount_for_swap_utxo} tUSDT.")
+            print(f"- {updated_masset_amount_for_swap_utxo} BTC.")
 
     async def swap_b_with_a(self, amount_b: int) -> int:
         """Operation for swaping coin B with A"""
-        exchange_rate_price = await self.get_oracle_exchange_rate()
-        print(exchange_rate_price)
-        print(
-            f"Oracle exchange rate: {exchange_rate_price / self.coin_precision} tUSDT/tADA (A/B)"
+
+        feed_utxos = self.chain_query.get_utxos_with_asset_from_kupo(
+            self.odv_config.policy_id, self.odv_config.nft_aggstate
+        )
+        _, exchange_rate_price = await get_oracle_exchange_rate(feed_utxos)
+        print_status(
+            "Oracle exchange rate",
+            f"{exchange_rate_price / self.coin_precision} BTC/tADA (A/B)",
         )
         return (amount_b * self.coin_precision) // exchange_rate_price
 
     async def swap_a_with_b(self, amount_a: int) -> int:
         """Operation for swaping coin A with B"""
-        exchange_rate_price = await self.get_oracle_exchange_rate()
-        print(
-            f"Oracle exchange rate: {exchange_rate_price / self.coin_precision} tUSDT/tADA (A/B)"
+        feed_utxos = self.chain_query.get_utxos_with_asset_from_kupo(
+            self.odv_config.policy_id, self.odv_config.nft_aggstate
+        )
+        _, exchange_rate_price = await get_oracle_exchange_rate(feed_utxos)
+
+        print_status(
+            "Oracle exchange rate",
+            f"{exchange_rate_price / self.coin_precision} BTC/tADA (A/B)",
         )
         return (amount_a * exchange_rate_price) // self.coin_precision
 
     def format_timestamp(self, timestamp):
         """Convert epoch to humnan"""
         return datetime.utcfromtimestamp(timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
-
-    async def get_oracle_exchange_rate(self) -> int:
-        """
-        Get the oracle's feed exchange rate and return a tuple of the price and UTxO object.
-
-        Returns:
-            A tuple containing the exchange rate and the UTxO object, or None if not available.
-        """
-        price = 0
-        oracle_feed_utxo = await self.get_oracle_utxo()
-
-        if oracle_feed_utxo.output.datum and not isinstance(
-            oracle_feed_utxo.output.datum, GenericData
-        ):
-            if oracle_feed_utxo.output.datum.cbor:
-                oracle_inline_datum = GenericData.from_cbor(
-                    oracle_feed_utxo.output.datum.cbor
-                )
-                price = oracle_inline_datum.price_data.get_price()
-
-        return price
 
     async def get_oracle_timestamp(self) -> int:
         """Get the oracle's feed exchange rate"""
@@ -328,31 +302,28 @@ class SwapContract:
 
     async def get_oracle_utxo(self) -> pyc.UTxO:
         """Retrieve the oracle's feed UTXO using the NFT identifier."""
-        oracle_utxos = await self.chain_query.get_utxos(str(self.oracle_addr))
-        oracle_utxo_nft = next(
-            utxo
-            for utxo in oracle_utxos
-            if utxo.output.amount.multi_asset == self.oracle_nft
+
+        feed_utxos = self.chain_query.get_utxos_with_asset_from_kupo(
+            self.odv_config.policy_id, self.odv_config.nft_aggstate
         )
-        return oracle_utxo_nft
+        utxo, _ = await get_oracle_exchange_rate(feed_utxos)
+
+        return utxo
 
     async def get_swap_utxo(self) -> pyc.UTxO:
         """Retrieve the UTxO for the swap using the NFT identifier"""
-        swap_utxos = await self.chain_query.get_utxos(str(self.swap_addr))
         try:
-            swap_utxo_nft = next(
-                x
-                for x in swap_utxos
-                if x.output.amount.multi_asset >= self.swap.swap_nft
+            swap_utxos = self.chain_query.get_utxos_with_asset_from_kupo(
+                self.swap.policy_id, self.swap.nft_swap
             )
-            return swap_utxo_nft
+            return swap_utxos[0]
         except StopIteration:
             raise ValueError("No matching UTxO found for the given NFT identifier")
 
     async def decrease_asset_swap(self, selling_amount: int) -> pyc.MultiAsset:
         """The updated swap asset to be decreased at the address"""
-        ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
-        ((asset, _),) = assets.to_shallow_primitive().items()
+        policy_id = self.swap.token_a_policy_id
+        asset_name = self.swap.token_a_asset_name
 
         swap_utxo = await self.get_swap_utxo()
         m_assets = swap_utxo.output.amount.multi_asset.to_shallow_primitive()
@@ -361,11 +332,13 @@ class SwapContract:
         multi_asset_assets_names = pyc.Asset()
         for swap_policy_id, assets in m_assets.items():
             if swap_policy_id == policy_id:
-                for asset_name, amount in assets.items():
-                    if asset_name == asset:
-                        multi_asset_assets_names[asset_name] = amount - selling_amount
+                for asset_name_in_utxo, amount in assets.items():
+                    if asset_name_in_utxo == asset_name:
+                        multi_asset_assets_names[asset_name_in_utxo] = (
+                            amount - selling_amount
+                        )
                     else:
-                        multi_asset_assets_names[asset_name] = amount
+                        multi_asset_assets_names[asset_name_in_utxo] = amount
             else:
                 new_multi_asset_dict[swap_policy_id] = assets
         new_multi_asset_dict[policy_id] = multi_asset_assets_names
@@ -373,8 +346,8 @@ class SwapContract:
 
     async def decrease_asset_swap_amount(self, selling_amount: int) -> int:
         """The updated swap asset amount to be decreased at the address"""
-        ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
-        ((asset, _),) = assets.to_shallow_primitive().items()
+        policy_id = self.swap.token_a_policy_id
+        asset_name = self.swap.token_a_asset_name
 
         swap_utxo = await self.get_swap_utxo()
         m_assets = swap_utxo.output.amount.multi_asset.to_shallow_primitive()
@@ -382,17 +355,18 @@ class SwapContract:
         amountA = 0
         for swap_policy_id, assets in m_assets.items():
             if swap_policy_id == policy_id:
-                for asset_name, amount in assets.items():
-                    if asset_name == asset:
+                for asset_name_in_utxo, amount in assets.items():
+                    if asset_name_in_utxo == asset_name:
                         amountA = amount - selling_amount
         return amountA
 
     async def add_asset_swap(self, buying_amount: int):
         """The updated swap asset to be added at the address"""
-        ((coin_a_policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
-        ((coin_a_asset_name, _),) = assets.to_shallow_primitive().items()
-
         swap_utxo = await self.get_swap_utxo()
+
+        coin_a_policy_id = str(self.swap.token_a_policy_id)
+        coin_a_asset_name = str(self.swap.token_a_asset_name)
+
         has_coin_a_policy = swap_utxo.output.amount.multi_asset.get(
             coin_a_policy_id, None
         )
@@ -422,8 +396,8 @@ class SwapContract:
 
     async def add_asset_swap_amount(self, buying_amount: int) -> int:
         """The updated swap asset amount to be added at the address"""
-        ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
-        ((asset, _),) = assets.to_shallow_primitive().items()
+        policy_id = self.swap.token_a_policy_id
+        asset_name = self.swap.token_a_asset_name
 
         swap_utxo = await self.get_swap_utxo()
         m_assets = swap_utxo.output.amount.multi_asset.to_shallow_primitive()
@@ -431,9 +405,10 @@ class SwapContract:
         amountA = 0
         for swap_policy_id, assets in m_assets.items():
             if swap_policy_id == policy_id:
-                for asset_name, amount in assets.items():
-                    if asset_name == asset:
+                for asset_name_in_utxo, amount in assets.items():
+                    if asset_name_in_utxo == asset_name:
                         amountA = amount + buying_amount
+
         return amountA
 
     async def take_multi_asset_user(self, buying_amount: int) -> pyc.MultiAsset:
@@ -470,16 +445,18 @@ class SwapContract:
             amount += utxo.output.amount.coin
         return amount
 
-    async def available_user_tusdt(self, user_address: pyc.Address) -> int:
+    async def available_user_tbtc(self, user_address: pyc.Address) -> int:
         amount_asset = 0
-        ((policy_id, assets),) = self.swap.coinA.to_shallow_primitive().items()
-        ((asset, _),) = assets.to_shallow_primitive().items()
+
+        policy_id = self.swap.token_a_policy_id
+        asset_name = self.swap.token_a_asset_name
+
         utxos = await self.chain_query.get_utxos(str(user_address))
         for utxo in utxos:
             m_assets = utxo.output.amount.multi_asset.to_shallow_primitive()
             for user_policy_id, assets in m_assets.items():
                 if user_policy_id == policy_id:
-                    for asset_name, amount in assets.items():
-                        if asset_name == asset:
+                    for asset_name_in_utxo, amount in assets.items():
+                        if asset_name_in_utxo == asset_name:
                             amount_asset += amount
         return amount_asset

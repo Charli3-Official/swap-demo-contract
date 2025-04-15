@@ -1,30 +1,36 @@
-#+title: Odv Request
-Integration of the odv-request transaction
-#+begin_src bash
- λ > poetry run odv-demo blockfrost preprod send-odv-request --help
-usage: python main.py [{blockfrost,ogmios}] [{preprod,mainnet}] send-odv-request [-h] [--funds-to-send FUNDSTOSEND]
+#+title: ODV Request Integration
+#+author: Charli3 Team
+#+date: April 2025
 
+* Overview
+This document outlines the integration process for the On-Demand Validation (ODV) request transaction system in the Charli3 Oracle network. ODV requests allow smart contracts to access real-time, multi-source exchange rate data when needed.
+
+* Command Interface
+
+You can access the ODV request functionality through the CLI:
+
+#+begin_src bash
+λ > charli3 ogmios preprod send-odv-request --help
+usage: python main.py [{ogmios}] [{preprod}] send-odv-request [-h]
 Generate a request for information by prepaying the Charli3 oracles.
-
 options:
-  -h, --help            show this help message and exit
-  --funds-to-send FUNDSTOSEND
-                        Minimum C3 payment amount for the generation of an oracle-feed.
+  -h, --help  show this help message and exit
 #+end_src
 
-Generating an ODV request involves sending a pre-calculated amount of C3 tokens to the ODV contract. When this is done, the backend configured for that contract will detect the payment of the C3 tokens and, within approximately one minute, the ODV contract will generate a new oracle feed.
-
-The pre-calculated amount of C3 tokens is determined based on the internal configuration of the ODV contract (specifically, the aggstate datum). These C3 tokens are used to compensate each individual C3 node in the network and to pay the contract administrator for monitoring and maintenance.
-
-The swap contract supports the operation of sending an ODV request using the following command:
+To execute an ODV request, connecting with all nodes, requesting data, signing the transaction, and submitting it to the blockchain:
 
 #+begin_src bash
-poetry run odv-demo blockfrost preprod send-odv-request
+poetry run odv-demo ogmios preprod send-odv-request
 #+end_src
 
-This command automatically calculates the required amount of C3 tokens needed to generate the aggregation.
+The command automatically calculates the required C3 tokens for the aggregation service.
 
-Let's use the following toy ODV oracle contract as an example to determine the minimum C3 tokens required. Its internal oracle configuration is as follows:
+* Payment Calculation
+
+** Static Payment Example
+
+Let's examine how payment is calculated using a sample ODV oracle contract configuration:
+
 #+begin_src yml
 oracle_settings:
   os_node_list:
@@ -39,12 +45,19 @@ oracle_settings:
     platform_fee: 1000000 # 1 C3
 #+end_src
 
-The ~os_node_list~ for this ODV oracle contract contains two nodes, and 100% of the nodes in the list are required to submit an aggregation.
+The payment calculation works as follows:
 
-To calculate the minimum C3 tokens needed, a user must multiply the ~node_fee~ by the number of nodes required, then add the ~aggregate_fee~ and ~platform_fee~. In this demo, the calculation is as follows: 1.5 * 2 + 2.5 + 1 = 6.5. Then 6500000 C3 tokens are required.
+1. Identify required nodes from `os_node_list` (2 nodes in this example)
+2. Check the percentage of nodes required via `os_updated_nodes` (100% in this example)
+3. Calculate the total payment:
+   - Node fee × Number of required nodes: 1.5 C3 × 2 = 3 C3
+   - Add aggregate fee: 2.5 C3
+   - Add platform fee: 1 C3
+   - Total: 6.5 C3 (6,500,000 lovelace-equivalent token units)
 
-So far, we've demonstrated how to compute a static payment. For a dynamic payment, an external Charli3 oracle contract is used for internal price conversion. You can find more details in the [[https://docs.charli3.io/charli3s-documentation/infrastructure#reward-system][dynamic payment]] documentation.
-The main concept behind dynamic payment is to use an external Charli3 oracle contract for payment conversion. For instance, let's consider an oracle with the following rewards:
+** Dynamic Payment
+
+For dynamic payment scenarios, an external Charli3 oracle contract handles price conversion. For example:
 
 #+begin_src yml
 oracle_settings:
@@ -58,45 +71,118 @@ oracle_settings:
     node_fee: 1500000 # 1.5 ADA
     aggregate_fee: 2500000 # 2.5 ADA
     platform_fee: 1000000 # 1 ADA
+  rate_nft: Union[SomeAsset, NoDatum]
 #+end_src
 
-The key difference is that we are now using ADA as the payment value, while the actual reward token delivered is C3, ensuring the payment retains its ADA value.
-This configuration can be found in the ~config.sample.yaml~ file.
+The key difference here is that values are denominated in ADA but paid in C3 tokens at the current exchange rate.
+
+The payment token is configured in the `config.sample.yaml` file:
 
 #+begin_src bash
-## Dynamic payment oracle
-dynamic_payment_oracle_addr:
-dynamic_payment_oracle_minting_policy:
-dynamic_payment_oracle_asset_name:
+  payment_token: # Reward token
+    policy_id: c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828
+    asset_name: TestC3 # Test Charli3 (TestC3)
 #+end_src
 
-The address belongs to the Charli3 oracle for the ~ADA/Charli3~ token pair, while the ~minting policy~ and ~asset name~ correspond to the ~oracle_feed UTxO~ of that particular contract.
+The exchange rate for dynamic payment is set in the oracle configuration datum under C3 Coresettings.
 
-For example, if the ADA/Charli3 price is 4.9 ADA per C3, the conversion payment would be 31.85 or 31850000 C3 tokens.
-
-Alternatively, the user can send any amount they want; however, the contract will create an aggregation only if the minimum required C3 token amount is covered. Any excess amount will go to the platform administrator for each round, while the nodes will continue to receive rewards according to the pre-established configuration.
+The asset structure is defined as:
 
 #+begin_src bash
-poetry run odv-demo blockfrost preprod send-odv-request --funds-to-send 6500000
+@dataclass
+class SomeAsset(PlutusData):
+    """Represents a native token asset"""
+    CONSTR_ID = 0
+    asset: Asset
+
+@dataclass
+class Asset(PlutusData):
+    """Represents a native token asset"""
+    CONSTR_ID = 0
+    policy_id: PolicyId
+    name: AssetName
+
+    def __post_init__(self) -> None:
+        # Add validation for policy_id length (28 bytes for Cardano)
+        if len(self.policy_id) != 28:
+            raise ValueError("Policy ID must be 28 bytes long")
 #+end_src
 
-** Off-chain Integration
-For off-chain integration, we use the ~OracleUser(DynamicRewardsMixin)~ class, which enables the ~send_odv_request~ method.
+Example: If the ADA/C3 exchange rate is 4.9 ADA per C3, and the total fee in ADA is 6.5 ADA, then the payment would be 6.5 ÷ 4.9 = 1.33 C3, or 1,330,000 token units.
+
+Users can send any amount of C3 tokens, but the contract will only create an aggregation if the minimum required amount is covered. Any excess goes to the platform administrator, while nodes receive their predefined rewards.
+
+* Off-Chain Integration Process
+
+The `send-odv-request` implementation follows a comprehensive workflow (main.py):
+
+1. **Initialization and Configuration**
+   - Load configurations and establish network connection
+   - Initialize the ODV client (`ODVClient`)
+   - Calculate validity window for the request
+
+2. **Node Feed Collection**
+   - Request feed updates from all configured nodes
+   - Process and verify node responses
+   - Collect statistics on successful responses
+
+3. **Transaction Construction**
+   - Build an aggregate message from node responses
+   - Construct the ODV transaction with payment information
+   - Prepare transaction parameters including validity window and reward tokens
+
+4. **Signature Collection**
+   - Send the constructed transaction to oracle nodes for verification
+   - Collect cryptographic signatures from participating nodes
+   - Verify sufficient signature threshold is met
+
+5. **Transaction Finalization**
+   - Attach collected signatures to the transaction
+   - Submit the fully signed transaction to the blockchain
+   - Monitor transaction status to confirm successful processing
+
+6. **Error Handling**
+   - Handle transaction processing errors
+   - Manage network-related exceptions
+   - Provide detailed status reports throughout the process
+
+The implementation utilizes asynchronous programming to efficiently handle concurrent requests to multiple oracle nodes, ensuring optimal performance during the data collection and signature gathering phases.
+
+When successful, the transaction will be confirmed on the blockchain, making the oracle feed data available for consumption by smart contracts in the same block as the ODV request.
+* Reference Implementation
+
+We strongly recommend reviewing the file ~swap_demo_contract/client/odv.py~ for a complete understanding of the ODV implementation. This file contains the essential components that power the ODV request process:
+
+** Key Components in odv.py
+
+*** ODVClient Class
+The central implementation that manages the entire ODV workflow:
+
 #+begin_src python
-OracleUser(
-    network,                      # Environment
-    context,                      # Blockchain connection
-    extended_payment_skey,        # Extended signing key for transaction submission
-    spend_vk,                     # Verification signing key for transaction submission
-    stake_vk,                     # Verification signing key for transaction submission
-    str(oracle_address),          # ODV oracle contract address
-    aggstate_nft,                 # ODV oracle contract aggstate UTxO NFT
-    reference_script_input,       # ODV oracle contract reference script transaction
-    c3_token_hash,                # Payment token hash
-    c3_token_name,                # Payment token name
-    dynamic_payment_oracle_addr,  # External Charli3 oracle address for internal conversion
-    dynamic_payment_oracle_nft,   # External Charli3 oracle ~oracle_feed~ NFT for internal conversion
-)
+class ODVClient:
+    async def collect_feed_updates(self, nodes, policy_id, validity_window):
+        # Collects oracle feed data from multiple nodes in parallel
+
+    async def collect_tx_signatures(self, nodes, tx_request):
+        # Gathers cryptographic signatures from nodes
+
+    def attach_tx_signatures(self, transaction, signed_txs):
+        # Incorporates signatures into the final transaction
 #+end_src
 
-We recommend reviewing the files ~swap_demo_contract/lib/oracle_user.py~ and ~swap_demo_contract/lib/dynamic_rewards.py~ for a deeper understanding of how to create an ODV request.
+*** Helper Functions
+
+#+begin_src python
+def build_aggregate_message(nodes_messages, timestamp):
+    # Constructs a consolidated message from multiple node responses
+    # Validates signatures and sorts feeds for deterministic processing
+#+end_src
+
+** Integration Considerations
+
+When implementing your own ODV client:
+
+1. *Network Resilience*: Design for partial success scenarios where some nodes may be unavailable
+2. *Timeout Management*: Set appropriate timeouts for node communication
+3. *Signature Verification*: Always validate node signatures before processing data
+4. *Transaction Building*: Ensure proper handling of the two-phase process (data collection → transaction signing)

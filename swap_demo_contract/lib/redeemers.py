@@ -25,3 +25,16 @@ class OdvRequest(PlutusData):
     """Top up contract redeemer"""
 
     CONSTR_ID = 8
+
+
+@dataclass
+class OracleRedeemer(PlutusData):
+    """Types of actions for Oracle smart contract"""
+
+    CONSTR_ID = 0  # Base constructor ID
+
+
+class OdvAggregate(OracleRedeemer):
+    """User sends on demand validation request with oracle nodes message"""
+
+    CONSTR_ID = 0
