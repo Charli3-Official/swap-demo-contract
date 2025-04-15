@@ -1,3 +1,4 @@
+import random
 import time
 from copy import deepcopy
 from typing import Sequence
@@ -223,8 +224,16 @@ def find_transport_pair(
         if not agg_states:
             raise StateValidationError("No valid agg state UTxO found")
 
-        # Return first pair found
-        return transports[0], agg_states[0]
+        # Randomly select a pair to prevent UTxO contention
+        if len(transports) == len(agg_states):
+            # If lists are same length, zip them and choose a random pair
+            paired = list(zip(transports, agg_states))
+            return random.choice(paired)
+        else:
+            # If different lengths, select one randomly from each list
+            transport = random.choice(transports)
+            agg_state = random.choice(agg_states)
+            return transport, agg_state
 
     except Exception as e:
         raise StateValidationError(f"Failed to find UTxO pair: {e}") from e
