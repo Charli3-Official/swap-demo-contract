@@ -224,10 +224,9 @@ def print_send_summary(result: OdvResult) -> None:
     print_row(
         "Network Fee:", f"{result.transaction.transaction_body.fee / 1_000_000:.6f} ₳"
     )
+    print_footer()
     print_status(
         "ODV aggregation completed successfully",
         f"tx id {result.transaction.id}",
         success=True,
     )
-
-    print_footer()
