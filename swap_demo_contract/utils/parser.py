@@ -146,12 +146,4 @@ def create_parser():
         help="Send a validation request on demand to ODV-Charli3 Oracle.",
         description="Generate a request for information by prepaying the Charli3 oracles.",
     )
-
-    send_odv_request_parser.add_argument(
-        "--funds-to-send",
-        type=int,
-        default=None,
-        dest="fundstosend",
-        help="Minimum C3 payment amount for the generation of an oracle-feed.",
-    )
     return parser
