@@ -216,14 +216,6 @@ The project includes a comprehensive command-line interface (CLI) for seamless t
 2. Ensure you have run `poetry install` to set up the environment
 3. Execute `charli3 --help` to display detailed information on all available command-line options
 
-## Usage
-
-The project includes a comprehensive command-line interface (CLI) for seamless transaction submission. To begin using the CLI, follow these steps:
-
-1. Navigate to the root directory of the project
-2. Ensure you have run `poetry install` to set up the environment
-3. Execute `charli3 --help` to display detailed information on all available command-line options
-
 ### Common Examples
 
 Below are some frequently used commands:
