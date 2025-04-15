@@ -73,6 +73,7 @@
   </ol>
 </details>
 <!-- ABOUT THE PROJECT -->
+
 ## About The Project
 
 This project serves as an educational resource designed to teach developers how to access and utilize Charli3's oracle information. All contract addresses, wallets, tokens, NFTs, and related components are intended exclusively for test environments and should not be deployed in production. However, the structure, logic, and methodologies demonstrated in this repository provide a solid foundation for developing contracts that interact with Charli3's production feeds.
@@ -85,9 +86,6 @@ The swap contract facilitates the exchange of native tokens through a wallet bas
 * **Add Liquidity**: Enables the addition of specific token amounts to the swap's UTXO. These tokens must be present in the wallet of the swap's creator.
 * **Swap A**: Allows exchange of asset A from the user's wallet to the swap's UTXO in exchange for asset B.
 * **Swap B**: Enables exchange of asset B from the user's wallet to the swap's UTXO in exchange for asset A.
-
-*Note:* Documentation for the off-chain integration of the send-odv-request can be found [here](https://github.com/Charli3-Official/swap-demo-contract/blob/main/swap_demo_contract/docs/odv-request.org).
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## ODV Request (On Demand Validation)
 ### Overview
